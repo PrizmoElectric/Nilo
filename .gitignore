@@ -4,3 +4,4 @@ node_modules/
 nohup.out
 
 .aider*
+venv-aider/
