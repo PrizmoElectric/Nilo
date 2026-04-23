@@ -1,0 +1,209 @@
+{
+  "jump": {
+    "name": "jump",
+    "description": "jump once",
+    "file": "jump.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "jump_5_times": {
+    "name": "jump_5_times",
+    "description": "jump 5 times in a row",
+    "file": "jump_5_times.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "wave": {
+    "name": "wave",
+    "description": "wave by swinging arm repeatedly",
+    "file": "wave.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "spin": {
+    "name": "spin",
+    "description": "do a full 360-degree spin in place",
+    "file": "spin.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "sprint_forward": {
+    "name": "sprint_forward",
+    "description": "sprint forward for 3 seconds",
+    "file": "sprint_forward.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "move_forward": {
+    "name": "move_forward",
+    "description": "walk forward for 2 seconds",
+    "file": "move_forward.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "move_back": {
+    "name": "move_back",
+    "description": "walk backward for 2 seconds",
+    "file": "move_back.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "move_left": {
+    "name": "move_left",
+    "description": "strafe left for 2 seconds",
+    "file": "move_left.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "move_right": {
+    "name": "move_right",
+    "description": "strafe right for 2 seconds",
+    "file": "move_right.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "look_around": {
+    "name": "look_around",
+    "description": "slowly pan around to observe the surroundings",
+    "file": "look_around.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "crouch_stand": {
+    "name": "crouch_stand",
+    "description": "crouch for 2 seconds then stand up",
+    "file": "crouch_stand.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-13",
+    "updated": "2026-04-13"
+  },
+  "attack_nearest_entity": {
+    "name": "attack_nearest_entity",
+    "description": "attack the nearest non-player entity (mob)",
+    "file": "attack_nearest_entity.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "sleep_in_bed": {
+    "name": "sleep_in_bed",
+    "description": "find the nearest bed and sleep in it",
+    "file": "sleep_in_bed.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "wake_up": {
+    "name": "wake_up",
+    "description": "wake up from bed if currently sleeping",
+    "file": "wake_up.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "open_nearest_chest": {
+    "name": "open_nearest_chest",
+    "description": "open the nearest chest and report its contents",
+    "file": "open_nearest_chest.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "fish": {
+    "name": "fish",
+    "description": "equip fishing rod and cast a line, recast automatically on catch",
+    "file": "fish.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "dig_below": {
+    "name": "dig_below",
+    "description": "dig the block directly below the bot's feet",
+    "file": "dig_below.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "equip_totem": {
+    "name": "equip_totem",
+    "description": "equip a totem of undying to the offhand if one is in inventory",
+    "file": "equip_totem.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "shoot_crossbow": {
+    "name": "shoot_crossbow",
+    "description": "equip crossbow, charge it, aim at nearest mob and fire",
+    "file": "shoot_crossbow.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "find_valuable_blocks": {
+    "name": "find_valuable_blocks",
+    "description": "scan nearby chunks for diamond, iron, gold ore and report locations",
+    "file": "find_valuable_blocks.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "list_villager_trades": {
+    "name": "list_villager_trades",
+    "description": "find nearest villager within 3 blocks and list its available trades",
+    "file": "list_villager_trades.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "collect_nearest_log": {
+    "name": "collect_nearest_log",
+    "description": "pathfind to and collect the nearest wood log block",
+    "file": "collect_nearest_log.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  },
+  "smelt_item": {
+    "name": "smelt_item",
+    "description": "open nearest furnace and report its current input/fuel/output slots",
+    "file": "smelt_item.js",
+    "successes": 0,
+    "failures": 0,
+    "created": "2026-04-23",
+    "updated": "2026-04-23"
+  }
+}
