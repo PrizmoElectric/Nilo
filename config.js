@@ -3,11 +3,11 @@
 const fs = require('fs');
 
 const BOT_USERNAME = 'NILO';
-const MASTER       = 'PrizmoElectric'; // owner — change here if username ever changes
+const MASTER       = process.env.MASTER || 'PrizmoElectric';
 const HOST         = 'localhost';
 const PORT         = 25565;
 const MC_VERSION   = '1.20.1';
-const LETTA_URL    = 'http://localhost:8283/v1/agents/agent-9fb13e9e-f9ce-4802-b90d-ffb5eceb5434/messages';
+const LETTA_URL    = process.env.LETTA_URL || 'http://localhost:8283/v1/agents/agent-9fb13e9e-f9ce-4802-b90d-ffb5eceb5434/messages';
 const LOG_PATH     = '/home/prizmo/mc-prominence2/data/logs/latest.log';
 const CONFIG_PATH  = '/home/prizmo/nilo/config.json';
 
