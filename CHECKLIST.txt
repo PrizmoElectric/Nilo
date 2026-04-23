@@ -1,0 +1,143 @@
+NILO PROJECT CHECKLIST
+======================
+Last updated: 2026-04-14
+Format: [x] complete | [~] incomplete/in-progress | [ ] todo
+
+────────────────────────────────────────────────────────
+REFACTOR: Monolithic nilo.js → modular structure
+────────────────────────────────────────────────────────
+[x] state.js         — shared runtime state object
+[x] config.js        — constants + loadConfig/saveConfig (includes MATURE_CROPS, regex consts)
+[x] trust.js         — isTrusted, trustPlayer, untrustPlayer, listTrusted
+[x] lang.js          — detectLanguage
+[x] letta.js         — queryLetta, parseAction
+[x] behavior.js      — setBehavior, clearBehavior
+[x] movement.js      — createMovements, buildOpenableIds, installDoorOpener, startFollow, tryUnstuck
+[x] items.js         — inventory helpers (getEquipDestination, isEquippable, pickupNearestItem, isBuildable)
+[x] combat.js        — isHostileMob, weapon helpers, startAttack, startBowMode
+[x] activities.js    — runFarm, collectGrave, startFishing, buildSimpleHouse, startDance, sleepInBed
+[x] monitor.js       — startProximityMonitor, startAutonomousBehaviors, startSkillAutonomyTicker, watchLog, sessionHintFor
+[x] commands.js      — handleNaturalCommand + all IS_* pattern matchers (EN + pt-BR):
+                        follow/come/closer/unstuck/stop/stay/sit/wander/attack/defensive/passive
+                        explore/stop_explore, fish/stop_fish, bow, tunnel/stop_tunnel,
+                        shoot_target, build, sleep, dance; physical: jump/move_dir/sprint/
+                        spin/wave/crouch/stand/look_dir; inventory: eat/equip/unequip/give/
+                        drop; click block at coords; look at me; NL trust management;
+                        say/repeat passthrough; farm, learn/run/forget/list skill,
+                        queue goal, autonomous on/off (no exact !nilo prefix needed)
+[x] actions.js       — dispatchAction, runCommand
+[x] nilo.js          — trimmed to entry point (~430 lines, was 1640)
+[x] map.txt           — up-to-date module map written
+
+────────────────────────────────────────────────────────
+SKILLS SYSTEM
+────────────────────────────────────────────────────────
+[x] skill-engine.js  — learnSkill, runSkill, autonomousTick, curriculum, skillCount, listSkills, deleteSkill, queueGoal
+[x] skills/manifest.json
+[x] Pre-built skills: jump, jump_5_times, wave, spin, sprint_forward, move_forward,
+                      move_back, move_left, move_right, look_around, crouch_stand
+
+────────────────────────────────────────────────────────
+INFRASTRUCTURE / FIXES
+────────────────────────────────────────────────────────
+[x] Door physics fix  — installDoorOpener (physicsTick proactive opener, Fabric workaround)
+[x] Fence set cleanup — modded stone/brick false-impassable fix in createMovements
+[x] Stuck recovery    — tryUnstuck + 3-streak abandon logic in nilo.js path_reset handler
+[x] canDig off by default — createMovements sets canDig=false unless opts.canDig===true;
+                            prevents pathfinder from mining walls/floors during normal nav
+[x] Login plugin handshake — fabric-networking-api-v1 + forgeconfigapiport handled
+[x] Auth auto-login   — /register and /login from bot.on('message')
+[x] Auto-reconnect    — 10s reconnect on bot end
+
+────────────────────────────────────────────────────────
+TUNNELING SYSTEM
+────────────────────────────────────────────────────────
+[x] tunnel.js        — startTunnel(bot, length): digs 1-wide 2-tall tunnel in MASTER's
+                        cardinal yaw direction; handles lava/water sealing, torch placement
+                        every 8 blocks, falling-block (sand/gravel) pre-clear, health abort
+                        (≤4 hp), step-forward via pathfinder with control-state fallback
+[x] IS_TUNNEL / IS_STOP_TUNNEL — command patterns in commands.js (EN + pt-BR); length
+                                   parsed from message, capped at 512
+[x] [ACTION: tunnel] — LLM-dispatchable action in actions.js
+[x] "tunnel" in actionHint in nilo.js
+
+────────────────────────────────────────────────────────
+EXPLORATION SYSTEM
+────────────────────────────────────────────────────────
+[x] state.exploringEnabled flag — toggled by explore/stop_explore action and NL command
+[x] IS_EXPLORE / IS_STOP_EXPLORE — command patterns in commands.js (EN + pt-BR)
+[x] [ACTION: explore] / [ACTION: stop_explore] — LLM-dispatchable in actions.js
+[x] "explore/stop_explore" in actionHint in nilo.js
+
+────────────────────────────────────────────────────────
+GAZE / TARGETING SYSTEM
+────────────────────────────────────────────────────────
+[x] gaze.js — getPlayerGazeTarget(bot, maxDistance): on-demand raycast from MASTER's eye
+              returns { block, entity, position }, entity wins if closer than block
+
+────────────────────────────────────────────────────────
+RANGED COMBAT
+────────────────────────────────────────────────────────
+[x] solveAimPoint()     — iterative ballistic solver: gravity drop + drag + target leading
+[x] shootAtEntity()     — equip bow/crossbow, re-aim every 50ms while charging, release
+[x] shootAtPosition()   — single shot at a static world position with gravity compensation
+[x] shootAtGazeTarget() — fires at whatever MASTER is looking at (entity or position)
+[x] startBowMode()      — updated to use shootAtEntity (replaces manual aim math)
+[x] "shoot that/it/there" — command in commands.js (IS_SHOOT_TARGET), passive-mode aware
+[x] [ACTION: shoot_target] — LLM-dispatchable action in actions.js
+[x] actionHint in nilo.js updated to include shoot_target
+
+────────────────────────────────────────────────────────
+CRAFTING SYSTEM
+────────────────────────────────────────────────────────
+[x] crafting.js      — craftItem, smeltItem, ensureTools, listCraftable, resolveItemName
+                        craftItem: resolves NL name → registry, finds/places crafting table,
+                        calls bot.recipesFor + bot.craft
+                        smeltItem: finds furnace, auto-fuels, puts input, waits for output
+                        ensureTools: crafts missing pickaxe/sword from available materials
+                        listCraftable: scans all recipes given current inventory
+[x] IS_CRAFT / IS_SMELT / IS_WHAT_CAN_CRAFT / IS_ENSURE_TOOLS — NL patterns in commands.js
+[x] [ACTION: ensure_tools] — LLM-dispatchable in actions.js + actionHint in nilo.js
+
+────────────────────────────────────────────────────────
+SIGN WRITING
+────────────────────────────────────────────────────────
+[x] writeSign(bot, text)   — place sign from inventory, wrapSignText to 4×15 chars,
+                              bot.updateSign() front face
+[x] wrapSignText(text)     — word-wrap helper: splits text into 4 lines ≤15 chars
+[x] IS_WRITE_SIGN          — NL pattern in commands.js; extracts text after "sign:" / "saying"
+[x] Auto-fill blank signs  — blockUpdate listener in nilo.js: when MASTER places a blank sign
+                              within 8 blocks, Letta generates in-character text, Nilo writes it
+
+────────────────────────────────────────────────────────
+PLUGIN UPGRADES
+────────────────────────────────────────────────────────
+[x] mineflayer-tool        — installed + loaded; auto-equips best tool when breaking blocks
+[x] mineflayer-armor-manager — installed + loaded; auto-equips best armor on inventory change
+[x] mineflayer-auto-eat    — installed + loaded; eats at hunger ≤15, bans rotten/toxic food
+
+────────────────────────────────────────────────────────
+GIT / HOUSEKEEPING
+────────────────────────────────────────────────────────
+[ ] Commit all new modules (currently all untracked — nothing committed since refactor)
+[ ] Clean up junk files: the two "--set-instructions=..." empty files in project root
+[ ] Update .gitignore if needed (currently modified but unreviewed)
+
+────────────────────────────────────────────────────────
+KNOWN GAPS / POTENTIAL TODOS (review before marking done)
+────────────────────────────────────────────────────────
+[ ] Test full boot: node nilo.js — confirm no import errors across all new modules
+[ ] Verify Letta LETTA_URL in config.js is still the correct agent ID
+[ ] letta.js: parseAction — confirm [ACTION: name] parsing still matches the prompt hint in nilo.js
+[x] activities.js collectGrave — fully ported: GoalBlock adjacent nav, stale-ref re-fetch,
+                                 openContainer withdraw, sneak+right-click fallback
+[ ] monitor.js watchLog — uses LOG_PATH from config, confirm path is still valid
+
+────────────────────────────────────────────────────────
+DISCORD PARITY
+────────────────────────────────────────────────────────
+[x] Expose terminal-only commands via Discord:
+      - !autonomous on/off, !skill learn/run/forget/list, !goal, !trust/!untrust/!trusted
+      - !behavior <mode> / !behavior clear
+      - !help shows full master command list
+      All MASTER-only. Non-master users keep read-only access (!status, !skills, !help).

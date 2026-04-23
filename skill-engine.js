@@ -343,6 +343,9 @@ function deleteSkill(skillName) {
 // skillCount
 function skillCount() { return Object.keys(loadManifest()).length; }
 
+// hasSkill — true if a skill with this exact name exists in the manifest
+function hasSkill(name) { return Object.prototype.hasOwnProperty.call(loadManifest(), name); }
+
 // ── Curriculum ────────────────────────────────────────────────────────────────
 // A FIFO goal queue. Nilo works through it automatically when autonomous mode
 // is enabled and the bot has been idle with no player nearby for 10+ minutes.
@@ -379,4 +382,4 @@ async function autonomousTick(bot, lastInteractionTime) {
   goalQueue.push(task);
 }
 
-module.exports = { learnSkill, runSkill, listSkills, deleteSkill, skillCount, queueGoal, autonomousTick, worldState };
+module.exports = { learnSkill, runSkill, listSkills, hasSkill, deleteSkill, skillCount, queueGoal, autonomousTick, worldState };
