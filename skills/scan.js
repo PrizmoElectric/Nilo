@@ -87,9 +87,13 @@ async function runScan(bot, raw) {
   const entry = { text: table, stamp, radius, rows: sorted };
   state.scans.unshift(entry);
 
-  // Chat Feedback
-  const top = sorted.slice(0, 8).map(([n, c]) => `${n}:${c}`).join(', ');
-  bot.chat(`Top blocks: ${top}`);
+  // Chat Feedback — only spam top blocks for tiny scans; bigger scans use echo
+  if (radius <= 2) {
+    const top = sorted.slice(0, 8).map(([n, c]) => `${n}:${c}`).join(', ');
+    bot.chat(`Top blocks: ${top}`);
+  } else {
+    bot.chat(`Scan done (${sorted.length} block types). Use "echo scan" to review.`);
+  }
   console.log(`[SCAN] Completed. Saved to ${file}`);
 
   return entry;
