@@ -1,48 +1,72 @@
-SESSION RESUME — 2026-04-25 (updated)
-======================================
+SESSION RESUME — 2026-04-25 (updated end-of-session)
+======================================================
 Pick up here in the next session.
 
 ── WHAT IS WORKING ────────────────────────────────────────────────────────────
 
 1. GRAVE PICKUP — CONFIRMED WORKING
-   yigd:grave added as manual override in modded-state-ids.json.
-   Nilo successfully picks up the grave now.
+   yigd:grave manual override in modded-state-ids.json. Confirmed 2026-04-25.
 
 2. REGISTRY PATCH (registry-patch.js)
-   Auto-mapper is in place. Intercepts Fabric sync packet, gap-analyzes state IDs.
-   Manual overrides in modded-state-ids.json take highest priority.
+   Auto-mapper intercepts Fabric sync packet, gap-analyzes state IDs.
+   Manual overrides (blockmap command or modded-state-ids.json) take priority.
+   BLOCK_PHYSICS table applied after every patch (fixes podzol, tall_grass, etc.)
 
-3. SCAN COMMAND (commands/registry.js + skills/scan.js)
-   - "scan [radius]" → block frequency table, saved to scans/, updates state.lastScan
-   - "echo scan" → posts last scan top-20 to chat (3 per msg, 300ms apart)
+3. SCAN SYSTEM (commands/registry.js + skills/scan.js)
+   - "scan [radius]" → scans area, saves to scans/, radius > 2 suppresses chat spam
+   - "echo scan [N]" → posts scan N top-20 to chat, one line per message 250ms apart
+   - "echo scan N-M" → one summary line per scan in range
    - "blockmap <stateId> <mod:block>" → persists manual override, re-patches registry
+   - "id <stateId>" → searches 32-block radius, reports exact coordinates of all hits
+   - "X is [actually] Y" → conversational block remapping (patches all state IDs for X→Y)
 
-── WHAT NEEDS FIXING ──────────────────────────────────────────────────────────
+4. DISCORD BRIDGE (discord-bridge.js)
+   - discordContext flag: messages from Discord do NOT echo in-game
+   - bot.chat() monkey-patch sends to Discord always, in-game only when not in discordContext
+   - Letta path no longer calls toDiscord() directly (bot.chat handles it)
 
-A. ECHO COMMAND — not working as intended (reported 2026-04-25, not yet diagnosed)
-   Need: actual error or description of wrong behavior from user before touching code.
+5. SLEEP (activities.js sleepInBed)
+   Fallback search using getModdedBlockName for beds misidentified in registry.
+   Patches registry permanently on first successful match.
 
-── WHAT IS NOT YET TESTED ─────────────────────────────────────────────────────
+6. LOGGER (logger.js)
+   Intercepts console, routes by [TAG] prefix to logs/YYYY-MM-DD/<tag>.log
+   Errors duplicated to error.log. Installed in nilo.js via require('./logger').install()
 
-B. REGISTRY AUTO-MAPPING (non-grave blocks)
-   - Does vanillaMax get set correctly on spawn? (watch [REGISTRY] log lines)
-   - Do chunk palettes get scanned? ("Found X unknown state IDs")
-   - Does gap analysis fire? ("Resolved X state IDs")
-   - Does modded-blocks-mapping.json get created?
+7. RESTART COMMAND (commands/misc.js)
+   "restart" / "reiniciar" / "reboot" → bot.quit(), reconnects in 10s automatically
+
+8. ALL CHANGES COMMITTED AND PUSHED
+   Latest commit: f775400 (scan suppression) + 90e6f72 (id command) + 11ecad3 (restart)
+   Branch: main — up to date with origin.
+
+── WHAT NEEDS TESTING ─────────────────────────────────────────────────────────
+
+A. REGISTRY AUTO-MAPPING (non-grave blocks)
+   - Watch [REGISTRY] log lines on server connect
    - Does scan show real mod block names instead of unknown(stateId:N)?
+   - Does modded-blocks-mapping.json get written on first connect?
 
-C. isHostileMob for modded mobs — unverified
+B. isHostileMob for modded mobs — unverified
 
-D. Full boot test — confirm no import errors: node nilo.js
+C. Full boot test — confirm no import errors: node nilo.js
 
-── AGENT NOTES LOCATION ───────────────────────────────────────────────────────
+── KNOWN GAPS ─────────────────────────────────────────────────────────────────
 
-Map, checklist, and this file are now in:  nilo/agent/
+D. BLOCK PHYSICS — hardcoded BLOCK_PHYSICS table in registry-patch.js
+   Not scalable. See CHECKLIST: "SQLite Knowledge Base" section for planned fix.
+   For now: add entries manually when Nilo misidentifies passable/solid blocks.
 
-── OTHER PENDING (lower priority) ────────────────────────────────────────────
+E. Junk files in project root — "--set-instructions=..." files never cleaned up
 
-- Commit all new modules (nothing committed since refactor)
-- Clean up junk files: "--set-instructions=..." empty files in project root
-- Verify LETTA_URL env var is set before running
-- Confirm LOG_PATH in monitor.js / config.js is valid
-- Review modded-blocks-uncertain.log after next run (check LOW confidence entries)
+── NEXT MAJOR FEATURE ─────────────────────────────────────────────────────────
+
+SQLite Knowledge Base (see CHECKLIST for full schema + implementation steps):
+  npm install better-sqlite3 → db.js → migrate registry-patch + commands/registry
+  Replaces JSON knowledge files, enables conversational learning, entity knowledge.
+
+── AGENT FILES ────────────────────────────────────────────────────────────────
+
+  agent/map.txt         — full module architecture map
+  agent/CHECKLIST.txt   — feature checklist with SQLite plan
+  agent/SESSION_RESUME.txt — this file

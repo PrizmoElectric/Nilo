@@ -130,7 +130,7 @@ MODDED BLOCK REGISTRY PATCH
 ────────────────────────────────────────────────────────
 GIT / HOUSEKEEPING
 ────────────────────────────────────────────────────────
-[ ] Commit all new modules (currently all untracked — nothing committed since refactor)
+[x] Commit all new modules — committed and pushed (origin/main up to date as of 2026-04-25)
 [ ] Clean up junk files: the two "--set-instructions=..." empty files in project root
 [ ] Update .gitignore if needed (currently modified but unreviewed)
 
@@ -143,6 +143,21 @@ KNOWN GAPS / POTENTIAL TODOS (review before marking done)
 [x] activities.js collectGrave — fully ported: GoalBlock adjacent nav, stale-ref re-fetch,
                                  openContainer withdraw, sneak+right-click fallback
 [ ] monitor.js watchLog — uses LOG_PATH from config, confirm path is still valid
+
+────────────────────────────────────────────────────────
+SCAN / BLOCK IDENTIFICATION COMMANDS
+────────────────────────────────────────────────────────
+[x] scan [radius]     — scans area, radius > 2 suppresses chat (use echo to review)
+[x] echo scan [N]     — posts scan N top-20, one line per message at 250ms
+[x] echo scan N-M     — one summary line per scan in range
+[x] blockmap <sid> <mod:block> — manual state ID → block name override
+[x] id <stateId>      — locates exact coordinates of all blocks with that state ID (32-block radius)
+[x] X is [actually] Y — conversational remapping: patches all state IDs for X to Y name
+
+────────────────────────────────────────────────────────
+MISC COMMANDS
+────────────────────────────────────────────────────────
+[x] restart / reiniciar / reboot — disconnect + reconnect in 10s
 
 ────────────────────────────────────────────────────────
 COMBAT AUTONOMY SYSTEM
