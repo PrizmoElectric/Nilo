@@ -1,16 +1,12 @@
 // Skill: sleep_in_bed
-// Description: find the nearest bed and sleep in it
+// Description: navigate to nearest bed and sleep in it
 // Handcrafted: true
 
+const { sleepInBed } = require('../activities');
+
 async function niloSkill(bot) {
-  const bed = bot.findBlock({ matching: block => bot.isABed(block) });
-  if (!bed) throw new Error('No bed found nearby');
-  try {
-    await bot.sleep(bed);
-    return 'sleeping in bed';
-  } catch (err) {
-    throw new Error(`Can't sleep: ${err.message}`);
-  }
+  await sleepInBed(bot);
+  return 'attempted to sleep in bed';
 }
 
 module.exports = niloSkill;

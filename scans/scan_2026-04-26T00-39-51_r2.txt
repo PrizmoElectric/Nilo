@@ -1,0 +1,9 @@
+Scan at 346, 63, 176 | Radius: 2
+Timestamp: 2026-04-26T00:39:51.906Z
+
+Block(StateID)                Count
+----------------------------  -----
+dirt(sid:10)                     25
+spruce_trapdoor(sid:6087)         6
+water(sid:80)                     2
+chiseled_bookshelf(sid:2285)      1

@@ -1,0 +1,8 @@
+Scan at 349, 63, 177 | Radius: 1
+Timestamp: 2026-04-26T00:41:05.190Z
+
+Block(StateID)                  Count
+------------------------------  -----
+minecraft:stone_bricks(sid:13)      2
+grass_block(sid:9)                  2
+chiseled_bookshelf(sid:2285)        1

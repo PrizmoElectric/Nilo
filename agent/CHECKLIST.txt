@@ -1,6 +1,6 @@
 NILO PROJECT CHECKLIST
 ======================
-Last updated: 2026-04-14
+Last updated: 2026-04-25
 Format: [x] complete | [~] incomplete/in-progress | [ ] todo
 
 ────────────────────────────────────────────────────────
@@ -117,6 +117,17 @@ PLUGIN UPGRADES
 [x] mineflayer-auto-eat    — installed + loaded; eats at hunger ≤15, bans rotten/toxic food
 
 ────────────────────────────────────────────────────────
+MODDED BLOCK REGISTRY PATCH
+────────────────────────────────────────────────────────
+[x] registry-patch.js — intercept Fabric registry_sync custom_payload packet,
+                         parse blockName→stateId map, patch bot.registry so
+                         bot.blockAt() returns correct names for all modded blocks
+[x] Wire installRegistryPatch(bot) call in nilo.js before bot login event
+[x] Verify grave detection works after patch (yigd:grave resolves by name) — CONFIRMED 2026-04-25, manual override in modded-state-ids.json
+[ ] Verify scan command shows real mod block names instead of unknown(type:N)
+[ ] Verify isHostileMob entity detection works for modded mob names
+
+────────────────────────────────────────────────────────
 GIT / HOUSEKEEPING
 ────────────────────────────────────────────────────────
 [ ] Commit all new modules (currently all untracked — nothing committed since refactor)
@@ -132,6 +143,72 @@ KNOWN GAPS / POTENTIAL TODOS (review before marking done)
 [x] activities.js collectGrave — fully ported: GoalBlock adjacent nav, stale-ref re-fetch,
                                  openContainer withdraw, sneak+right-click fallback
 [ ] monitor.js watchLog — uses LOG_PATH from config, confirm path is still valid
+
+────────────────────────────────────────────────────────
+COMBAT AUTONOMY SYSTEM
+────────────────────────────────────────────────────────
+[x] combatTick() — shared autonomous combat AI function in combat.js:
+      distance-based action selection (melee / ranged / kite / close-in / retreat)
+      auto-equips totem when health <= 6 (via skill engine)
+      uses perfect_shot_bow skill when ranged weapon available + target in range
+      falls back to shootAtEntity if skill not found
+      per-action cooldowns prevent action spam
+[x] startAttack — rewritten to delegate to combatTick (melee + ranged + totem)
+[x] startAssist — rewritten to delegate to combatTick + player follow
+[x] guard skill — rewritten to delegate to combatTick + return-to-post
+[x] "defend me"/"guard me"/"cover me" — added to IS_HELP trigger patterns
+[x] mineflayer-pvp — installed + loaded in nilo.js
+[x] minecrafthawkeye — installed + loaded in nilo.js
+[x] perfect_shot_bow skill — hawkeye-based precise shot, used by combatTick
+[x] equip_totem skill — used autonomously by combatTick when health low
+
+────────────────────────────────────────────────────────
+KNOWLEDGE BASE — SQLite (NEXT MAJOR FEATURE)
+────────────────────────────────────────────────────────
+Objective: replace all JSON knowledge files with a single SQLite database
+so Nilo can learn, query, and reason about his world autonomously.
+
+WHY SQLite OVER JSON:
+  - Multiple JSON files (modded-state-ids.json, modded-blocks-mapping.json,
+    learned-physics.json) are siloed and can't reference each other.
+  - As Nilo learns more (blocks, entities, locations, player corrections),
+    querying and joining across topics requires a real database.
+  - better-sqlite3 is synchronous and zero-config — perfect for a game bot.
+  - One file on disk instead of many scattered JSON files.
+
+SCHEMA (planned):
+  blocks     — name, bounding_box, is_solid, is_passable, hardness,
+               source (vanilla/auto/player/observed), confidence, taught_by
+  state_ids  — state_id → block_name, source, confidence
+               (replaces modded-state-ids.json + modded-blocks-mapping.json)
+  entities   — name, is_hostile, source, confidence, taught_by
+  locations  — x, y, z, label, notes
+  learned    — full history of what the player has taught Nilo and when
+
+PHYSICS RESOLUTION (replaces hardcoded BLOCK_PHYSICS table):
+  When creating a descriptor for a state ID, check blocks table first.
+  If found → use stored physics. If not → look up vanilla registry by name.
+  If still not found → heuristic fallback + mark as low confidence.
+  Truly modded blocks with unknown physics can be taught conversationally:
+    "yigd:grave is solid" → saved to blocks table, applied immediately.
+
+CONVERSATIONAL LEARNING (extends current block alias command):
+  "pumpkin_stem is stone_bricks"  → remap state IDs + inherit vanilla physics
+  "yigd:grave is solid"           → save to blocks table as player-taught
+  "that creeper mod is hostile"   → save to entities table
+  All saved to DB with source='player', taught_by=username, timestamp.
+
+IMPLEMENTATION STEPS:
+[ ] npm install better-sqlite3
+[ ] Create db.js — opens/creates nilo.db, runs migrations, exports db instance
+[ ] Write schema migrations (blocks, state_ids, entities, locations, learned)
+[ ] Migrate registry-patch.js to read/write state_ids + blocks tables
+    - On boot: load overrides from state_ids (replaces modded-state-ids.json)
+    - On resolve: write to state_ids (replaces modded-blocks-mapping.json)
+    - Descriptor creation: query blocks table for physics before using heuristic
+[ ] Migrate commands/registry.js block alias to write to learned + blocks tables
+[ ] Add entity knowledge: IS_ENTITY_LEARN command ("X is hostile")
+[ ] Add "what do you know about X" query command
 
 ────────────────────────────────────────────────────────
 DISCORD PARITY

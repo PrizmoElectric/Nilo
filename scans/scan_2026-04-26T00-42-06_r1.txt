@@ -1,0 +1,8 @@
+Scan at 356, 63, 180 | Radius: 1
+Timestamp: 2026-04-26T00:42:06.391Z
+
+Block(StateID)            Count
+------------------------  -----
+minecraft:podzol(sid:13)      8
+torch(sid:2355)               3
+grass_block(sid:9)            1

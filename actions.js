@@ -4,9 +4,9 @@ const state = require('./state');
 const { setBehavior } = require('./behavior');
 const { createMovements, startFollow, tryUnstuck } = require('./movement');
 const { startAttack, startBowMode, shootAtGazeTarget } = require('./combat');
-const { startTunnel } = require('./tunnel');
+const { startTunnel } = require('./skills/tunnel');
 const { collectGrave, startFishing, buildSimpleHouse, startDance, sleepInBed } = require('./activities');
-const { ensureTools } = require('./crafting');
+const { ensureTools } = require('./skills/crafting');
 const { goals: { GoalNear } } = require('mineflayer-pathfinder');
 
 // ── Action dispatch ───────────────────────────────────────────────────────────

@@ -1,0 +1,7 @@
+Scan at 359, 33, 271  radius=1
+Timestamp: 2026-04-25T22:46:29.890Z
+
+Block         Count
+------------  -----
+stone             6
+pumpkin_stem      3

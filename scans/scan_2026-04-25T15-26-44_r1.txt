@@ -1,0 +1,8 @@
+Scan at 357, 33, 272  radius=1
+Timestamp: 2026-04-25T15:26:44.021Z
+
+Block                    Count
+-----------------------  -----
+stone                        6
+pumpkin_stem                 3
+unknown(stateId:588209)      1

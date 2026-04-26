@@ -4,6 +4,25 @@ const { Movements, goals: { GoalBlock, GoalNear, GoalFollow } } = require('minef
 const state    = require('./state');
 const { setBehavior, clearBehavior } = require('./behavior');
 
+// This server uses pumpkin/melon stem blocks as decorative floor tiles (the mod
+// retextures them to look like tiled stone and adds a speed bonus). In minecraft-data
+// these have boundingBox:'empty' (passable), so mineflayer thinks the bot falls
+// through them while the server treats them as solid — causing constant position
+// correction jitter. Patching to 'block' makes pathfinder and physics agree with
+// the server.
+const SERVER_FLOOR_TILES = [
+  'pumpkin_stem', 'attached_pumpkin_stem',
+  'melon_stem',   'attached_melon_stem',
+];
+
+function applyServerBlockOverrides(bot) {
+  for (const name of SERVER_FLOOR_TILES) {
+    const block = bot.registry.blocksByName[name];
+    if (block) block.boundingBox = 'block';
+  }
+  console.log('[NILO] Server floor tile overrides applied (pumpkin/melon stems → solid).');
+}
+
 // ── Door / openable block constants ──────────────────────────────────────────
 
 // VANILLA_IRON_DOORS — only these two require redstone; all others can be pushed open.
@@ -79,6 +98,12 @@ function createMovements(bot, opts = {}) {
   }
   if (fencesRemoved > 0) {
     console.log(`[NILO] Removed ${fencesRemoved} stone/brick block(s) from fences set.`);
+  }
+
+  // Remove server floor tiles from fences — they're solid floor, not obstacles.
+  for (const name of SERVER_FLOOR_TILES) {
+    const b = bot.registry.blocksByName[name];
+    if (b) movements.fences.delete(b.id);
   }
 
   movements.canDig = opts.canDig === true;
@@ -222,5 +247,5 @@ async function tryUnstuck(bot) {
 module.exports = {
   VANILLA_IRON_DOORS, DOOR_KEYWORDS,
   buildOpenableIds, createMovements, installDoorOpener,
-  startFollow, tryUnstuck,
+  startFollow, tryUnstuck, applyServerBlockOverrides,
 };

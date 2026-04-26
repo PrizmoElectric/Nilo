@@ -14,9 +14,12 @@ const { goals: { GoalBlock } } = require('mineflayer-pathfinder');
 const { plugin: collectblock } = require('mineflayer-collectblock');
 const { plugin: movementPlugin } = require('mineflayer-movement');
 const toolPlugin   = require('mineflayer-tool').plugin;
-const armorManager = require('mineflayer-armor-manager');
-const autoEat      = require('mineflayer-auto-eat').loader;
+const armorManager    = require('mineflayer-armor-manager');
+const autoEat         = require('mineflayer-auto-eat').loader;
+const pvp             = require('mineflayer-pvp').plugin;
+const minecraftHawkEye = require('minecrafthawkeye').default;
 const skillEngine = require('./skill-engine');
+const { installRegistryPatch, setManualOverride } = require('./registry-patch');
 
 const state   = require('./state');
 const { BOT_USERNAME, MASTER, HOST, PORT, MC_VERSION,
@@ -26,7 +29,7 @@ const { detectLanguage }   = require('./lang');
 const { queryLetta, parseAction } = require('./letta');
 const { getInventorySummary }    = require('./items');
 const { setBehavior, clearBehavior } = require('./behavior');
-const { buildOpenableIds, createMovements, installDoorOpener, tryUnstuck } = require('./movement');
+const { buildOpenableIds, createMovements, installDoorOpener, tryUnstuck, applyServerBlockOverrides } = require('./movement');
 const { equipShield, equipBestMeleeWeapon } = require('./combat');
 const { collectGrave, runFarm, writeSign, wrapSignText } = require('./activities');
 const { startProximityMonitor, startAutonomousBehaviors, startSkillAutonomyTicker, watchLog } = require('./monitor');
@@ -55,6 +58,11 @@ function createBot() {
   bot.loadPlugin(toolPlugin);
   bot.loadPlugin(armorManager);
   bot.loadPlugin(autoEat);
+  bot.loadPlugin(pvp);
+  bot.loadPlugin(minecraftHawkEye);
+
+  // Intercept Fabric's registry sync packet to learn modded block names
+  installRegistryPatch(bot);
 
   // minecraft-protocol auto-responds to all login_plugin_request with null,
   // which causes duplicate responses. Remove it so we fully control the handshake.
@@ -82,6 +90,9 @@ function createBot() {
   bot.on('login', () => {
     console.log(`[NILO] Connected to ${HOST}:${PORT} as ${BOT_USERNAME}`);
     state.activeBotRef = bot;
+
+    // Patch server-specific block behaviours (floor tiles, etc.) once.
+    applyServerBlockOverrides(bot);
 
     // Cache door-like block IDs once so createMovements and the door opener
     // share the same set without re-scanning the registry on every call.
@@ -442,6 +453,7 @@ function createBot() {
     state.justDied   = true;
     clearBehavior(bot);
     state.behaviorMode = 'idle';
+    setManualOverride(bot, 588209, 'yigd:grave');
     bot.respawn();
   });
 

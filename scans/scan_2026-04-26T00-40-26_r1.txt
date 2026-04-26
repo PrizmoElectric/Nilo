@@ -1,0 +1,6 @@
+Scan at 348, 63, 177 | Radius: 1
+Timestamp: 2026-04-26T00:40:26.960Z
+
+Block(StateID)  Count
+--------------  -----
+podzol(sid:13)      1

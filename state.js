@@ -16,6 +16,8 @@ const state = {
   behaviorMode:          'idle',
   behaviorInterval:      null,
   intentionalDisconnect: false,
+  customWeapon:          null,  // modded weapon name set by "use X as weapon"
+  scans:                 [],    // [{text, stamp, radius, rows}, ...] newest first — for echo
 };
 
 module.exports = state;

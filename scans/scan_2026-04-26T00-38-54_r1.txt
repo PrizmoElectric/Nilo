@@ -1,0 +1,8 @@
+Scan at 346, 63, 175 | Radius: 1
+Timestamp: 2026-04-26T00:38:54.338Z
+
+Block(StateID)                Count
+----------------------------  -----
+spruce_trapdoor(sid:6087)         4
+water(sid:80)                     1
+chiseled_bookshelf(sid:2285)      1

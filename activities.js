@@ -111,26 +111,47 @@ async function runFarm(bot) {
 async function collectGrave(bot) {
   clearBehavior(bot);
 
-  const GRAVE_NAMES = ['grave', 'gravestone', 'tomb', 'coffin', 'soulstone'];
+  function isGraveBlock(b) {
+    const name = (b.name ?? '').toLowerCase();
+    if (name === 'gravel') return false;
+    // Direct stateId match for yigd:grave (fallback before registry is patched)
+    if (b.stateId === 588209) return true;
+    // Named modded blocks
+    if (name.includes(':') && (name.includes('grave') || name.includes('tombstone') || name.includes('coffin') || name.includes('soulstone'))) return true;
+    if (['gravestone','tombstone'].some(k => name.includes(k))) return true;
+    // Unnamed/unknown modded blocks — mineflayer can't resolve the registry name for
+    // many Fabric mods. Match any block with an empty or 'unknown' name that has a
+    // non-empty bounding box (i.e. it's a real solid/interactable block, not air).
+    if ((name === '' || name === 'unknown') && b.boundingBox && b.boundingBox !== 'empty') return true;
+    return false;
+  }
+
+  // Log unknown-named blocks nearby to help identify the grave type ID
+  const unknownBlocks = [];
+  bot.findBlock({ matching: b => {
+    if ((b.name === '' || b.name === 'unknown') && b.boundingBox !== 'empty' && unknownBlocks.length < 5) {
+      unknownBlocks.push(`type=${b.type} stateId=${b.stateId} at ${b.position}`);
+    }
+    return false;
+  }, maxDistance: 64 });
+  if (unknownBlocks.length) console.log('[NILO] Unknown modded blocks nearby:', unknownBlocks.join(' | '));
+
   const grave = bot.findBlock({
     matching: b => {
-      const n     = b.name.toLowerCase();
-      const match = GRAVE_NAMES.some(k => n.includes(k));
-      if (match) console.log(`[NILO] Found grave block: ${b.name} at ${b.position}`);
+      const match = isGraveBlock(b);
+      if (match) console.log(`[NILO] Found grave block: "${b.name}" type=${b.type} at ${b.position}`);
       return match;
     },
-    maxDistance: 128,
+    maxDistance: 200,
   });
 
   if (!grave) {
-    const sample = [];
+    const modded = [];
     bot.findBlock({ matching: b => {
-      if (sample.length < 20 && !['air','grass_block','dirt','stone','water','oak_log','oak_leaves','gravel','sand'].includes(b.name)) {
-        sample.push(b.name);
-      }
+      if (b.name.includes(':') && modded.length < 30) modded.push(b.name);
       return false;
-    }, maxDistance: 20 });
-    console.log('[NILO] No grave found. Nearby non-trivial blocks:', [...new Set(sample)].join(', ') || 'none');
+    }, maxDistance: 64 });
+    console.log('[NILO] No grave found. Nearby modded blocks:', [...new Set(modded)].join(', ') || 'none');
     bot.chat("I can't find my grave nearby.");
     return;
   }
@@ -165,7 +186,7 @@ async function collectGrave(bot) {
 
     // Re-fetch the block after navigation — the pre-nav reference can be stale
     const freshGrave = bot.blockAt(new Vec3(p.x, p.y, p.z));
-    if (!freshGrave || !GRAVE_NAMES.some(k => freshGrave.name.toLowerCase().includes(k))) {
+    if (!freshGrave || !isGraveBlock(freshGrave)) {
       bot.chat("The grave disappeared before I could collect it.");
       console.log('[NILO] Grave block gone after navigation. Was:', grave.name);
       return;
@@ -418,7 +439,7 @@ function startDance(bot) {
 async function sleepInBed(bot) {
   const bed = bot.findBlock({
     matching: b => b.name.endsWith('_bed'),
-    maxDistance: 32,
+    maxDistance: 48,
   });
   if (!bed) { bot.chat("I don't see a bed nearby."); return; }
 
@@ -454,7 +475,7 @@ async function sleepInBed(bot) {
     await bot.sleep(freshBed);
     bot.chat('Goodnight...');
   } catch (err) {
-    bot.chat("Can't sleep right now.");
+    bot.chat(`Can't sleep: ${err.message}`);
     console.error('[NILO] Sleep error:', err.message);
   }
 }

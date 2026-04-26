@@ -2,7 +2,7 @@
 
 const state = require('./state');
 
-// mode: idle | follow | wander | sit | attack | defensive | passive | fishing | bow | building | dance
+// mode: idle | follow | wander | sit | attack | assist | guard | defensive | passive | fishing | bow | building | dance | tunneling
 
 function clearBehavior(bot) {
   if (state.behaviorInterval) {

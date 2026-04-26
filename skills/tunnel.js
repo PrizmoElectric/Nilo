@@ -13,10 +13,10 @@
 
 const Vec3  = require('vec3');
 const { goals: { GoalBlock } } = require('mineflayer-pathfinder');
-const state = require('./state');
-const { setBehavior, clearBehavior } = require('./behavior');
-const { createMovements } = require('./movement');
-const { MASTER } = require('./config');
+const state = require('../state');
+const { setBehavior, clearBehavior } = require('../behavior');
+const { createMovements } = require('../movement');
+const { MASTER } = require('../config');
 
 const DEFAULT_LENGTH   = 32;
 const TORCH_INTERVAL   = 8;   // place a torch every N blocks

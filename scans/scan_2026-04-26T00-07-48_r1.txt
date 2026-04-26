@@ -1,0 +1,6 @@
+Scan at 361, 33, 269  radius=1
+Timestamp: 2026-04-26T00:07:48.567Z
+
+Block         Count
+------------  -----
+pumpkin_stem      9

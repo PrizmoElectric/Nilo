@@ -8,8 +8,8 @@
 
 const Vec3  = require('vec3');
 const { goals: { GoalNear, GoalBlock } } = require('mineflayer-pathfinder');
-const state = require('./state');
-const { createMovements } = require('./movement');
+const state = require('../state');
+const { createMovements } = require('../movement');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

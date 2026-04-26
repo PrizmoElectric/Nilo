@@ -1,0 +1,35 @@
+NILO — CORE OBJECTIVE
+=====================
+
+  AUTONOMY
+
+Nilo should be able to learn, adapt, and improve through natural conversation
+and experience — not through explicit technical commands.
+
+The end goal is a bot that:
+
+  • Understands the world by being told about it in plain language
+      "pumpkin_stem is actually stone_bricks"
+      "that mob is hostile"
+      "this area is safe to mine"
+
+  • Remembers corrections and applies them immediately
+      No manual JSON editing, no restarts, no blockmap commands
+
+  • Improves its own skills based on what it observes and what the player says
+      Generates new skills when it fails at something
+      Refines existing skills based on feedback
+
+  • Makes decisions without being asked
+      Notices something is wrong and fixes it
+      Detects threats, resources, opportunities in its environment
+
+  • Asks when it doesn't know
+      "I saw a block I don't recognize — what is it?"
+      "I failed to craft that. Do you have the materials?"
+
+─────────────────────────────────────────────────────────────
+Everything built should move toward this. If a new feature
+requires the player to run a technical command to fix something
+that Nilo could figure out from a sentence, it's not done yet.
+─────────────────────────────────────────────────────────────

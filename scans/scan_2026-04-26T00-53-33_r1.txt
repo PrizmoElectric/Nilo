@@ -1,0 +1,9 @@
+Scan at 364, 33, 279 | Radius: 1
+Timestamp: 2026-04-26T00:53:33.564Z
+
+Block(StateID)                    Count
+--------------------------------  -----
+stone(sid:1)                          6
+minecraft:stone_bricks(sid:6826)      3
+detector_rail(sid:1975)               1
+detector_rail(sid:1974)               1

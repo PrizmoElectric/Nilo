@@ -1,0 +1,48 @@
+SESSION RESUME — 2026-04-25 (updated)
+======================================
+Pick up here in the next session.
+
+── WHAT IS WORKING ────────────────────────────────────────────────────────────
+
+1. GRAVE PICKUP — CONFIRMED WORKING
+   yigd:grave added as manual override in modded-state-ids.json.
+   Nilo successfully picks up the grave now.
+
+2. REGISTRY PATCH (registry-patch.js)
+   Auto-mapper is in place. Intercepts Fabric sync packet, gap-analyzes state IDs.
+   Manual overrides in modded-state-ids.json take highest priority.
+
+3. SCAN COMMAND (commands/registry.js + skills/scan.js)
+   - "scan [radius]" → block frequency table, saved to scans/, updates state.lastScan
+   - "echo scan" → posts last scan top-20 to chat (3 per msg, 300ms apart)
+   - "blockmap <stateId> <mod:block>" → persists manual override, re-patches registry
+
+── WHAT NEEDS FIXING ──────────────────────────────────────────────────────────
+
+A. ECHO COMMAND — not working as intended (reported 2026-04-25, not yet diagnosed)
+   Need: actual error or description of wrong behavior from user before touching code.
+
+── WHAT IS NOT YET TESTED ─────────────────────────────────────────────────────
+
+B. REGISTRY AUTO-MAPPING (non-grave blocks)
+   - Does vanillaMax get set correctly on spawn? (watch [REGISTRY] log lines)
+   - Do chunk palettes get scanned? ("Found X unknown state IDs")
+   - Does gap analysis fire? ("Resolved X state IDs")
+   - Does modded-blocks-mapping.json get created?
+   - Does scan show real mod block names instead of unknown(stateId:N)?
+
+C. isHostileMob for modded mobs — unverified
+
+D. Full boot test — confirm no import errors: node nilo.js
+
+── AGENT NOTES LOCATION ───────────────────────────────────────────────────────
+
+Map, checklist, and this file are now in:  nilo/agent/
+
+── OTHER PENDING (lower priority) ────────────────────────────────────────────
+
+- Commit all new modules (nothing committed since refactor)
+- Clean up junk files: "--set-instructions=..." empty files in project root
+- Verify LETTA_URL env var is set before running
+- Confirm LOG_PATH in monitor.js / config.js is valid
+- Review modded-blocks-uncertain.log after next run (check LOW confidence entries)

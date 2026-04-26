@@ -18,7 +18,10 @@ const HOSTILE_MOBS = new Set([
 ]);
 
 function isHostileMob(entity) {
-  return entity.type === 'mob' && (HOSTILE_MOBS.has(entity.name) || entity.type === 'hostile');
+  if (!entity || entity.type === 'player' || entity.type === 'object') return false;
+  // Normalise name: strip namespace prefix, lowercase (handles modded entities)
+  const name = (entity.name || '').toLowerCase().replace(/^[a-z_]+:/, '');
+  return HOSTILE_MOBS.has(name) || entity.type === 'hostile' || entity.kind === 'Hostile mobs';
 }
 
 // ── Arrow physics constants ───────────────────────────────────────────────────
@@ -32,14 +35,28 @@ const CHARGE_XBOW_MS  = 1250;   // crossbow load time (~25 ticks)
 // ── Weapon / shield helpers ───────────────────────────────────────────────────
 
 function equipBestMeleeWeapon(bot) {
+  const { isWeapon } = require('./items');
+  const inv = bot.inventory.items();
+
+  // 1. Custom modded weapon set by player command
+  if (state.customWeapon) {
+    const custom = inv.find(i => i.name === state.customWeapon);
+    if (custom) { bot.equip(custom, 'hand').catch(() => {}); return; }
+  }
+
+  // 2. Vanilla priority list
   const priority = [
     'netherite_sword','diamond_sword','iron_sword','stone_sword','wooden_sword','golden_sword',
     'netherite_axe','diamond_axe','iron_axe','stone_axe','wooden_axe','golden_axe',
   ];
   for (const name of priority) {
-    const item = bot.inventory.items().find(i => i.name === name);
+    const item = inv.find(i => i.name === name);
     if (item) { bot.equip(item, 'hand').catch(() => {}); return; }
   }
+
+  // 3. Any modded weapon (isWeapon keyword match)
+  const modded = inv.find(i => isWeapon(i));
+  if (modded) { bot.equip(modded, 'hand').catch(() => {}); }
 }
 
 // equipBestRanged — returns { item, isCrossbow, speed } or null if no ammo.
@@ -66,54 +83,126 @@ function equipShield(bot) {
   if (shield) bot.equip(shield, 'off-hand').catch(() => {});
 }
 
+// ── Combat AI — shared autonomous combat tick ─────────────────────────────────
+//
+// Selects and executes the best action for one tick based on distance, health,
+// and available weapons/skills. Called by startAttack, startAssist, and guard.
+//
+//   bot       — the mineflayer bot
+//   anchorPos — Vec3 to search for targets around (null = bot's own position)
+//
+// Returns true if a target was found and action taken, false if no target.
+
+const MELEE_RANGE  = 3;
+const RANGED_RANGE = 32;
+const KITE_DIST    = 5;    // back off when mob is this close in ranged mode
+const RETREAT_HP   = 4;
+const TOTEM_HP     = 6;
+
+const _cd = {};  // action cooldown timestamps
+function _hasCd(name, ms) { return Date.now() - (_cd[name] || 0) < ms; }
+function _setCd(name)     { _cd[name] = Date.now(); }
+
+async function combatTick(bot, anchorPos) {
+  // ── Passive: equip totem if health low ──────────────────────────────────
+  if (bot.health <= TOTEM_HP && !_hasCd('totem', 15000)) {
+    const totemId = bot.registry.itemsByName.totem_of_undying?.id;
+    if (totemId && bot.inventory.findInventoryItem(totemId, null)) {
+      _setCd('totem');
+      const se = require('./skill-engine');
+      if (se.hasSkill('equip_totem')) se.runSkill(bot, 'equip_totem').catch(() => {});
+    }
+  }
+
+  const anchor = anchorPos || bot.entity.position;
+  const target = bot.nearestEntity(e => isHostileMob(e) && e.position.distanceTo(anchor) < 24);
+  if (!target) return false;
+
+  const dist = target.position.distanceTo(bot.entity.position);
+
+  // ── Retreat ──────────────────────────────────────────────────────────────
+  if (bot.health <= RETREAT_HP) {
+    if (!_hasCd('retreat', 800)) {
+      _setCd('retreat');
+      const p = bot.entity.position, m = target.position;
+      const dx = p.x - m.x, dz = p.z - m.z;
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+      bot.pathfinder.setGoal(new GoalNear(p.x + (dx / len) * 10, p.y, p.z + (dz / len) * 10, 2), true);
+    }
+    return true;
+  }
+
+  // ── Melee ────────────────────────────────────────────────────────────────
+  if (dist <= MELEE_RANGE) {
+    bot.pathfinder.setGoal(null);
+    if (!_hasCd('melee', 500)) {
+      _setCd('melee');
+      equipBestMeleeWeapon(bot);
+      try {
+        await bot.lookAt(target.position.offset(0, (target.height ?? 1.8) * 0.9, 0), true);
+        bot.attack(target);
+      } catch (err) { console.error('[COMBAT] Melee error:', err.message); }
+    }
+    return true;
+  }
+
+  // ── Ranged (prefers perfect_shot_bow skill if registered) ────────────────
+  const ranged = equipBestRanged(bot);
+  if (ranged && dist <= RANGED_RANGE && !_hasCd('ranged', 2500)) {
+    if (dist < KITE_DIST) {
+      // Too close — back off to optimal range before shooting
+      const p = bot.entity.position, m = target.position;
+      const dx = p.x - m.x, dz = p.z - m.z;
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+      bot.pathfinder.setGoal(new GoalNear(p.x + (dx / len) * 14, p.y, p.z + (dz / len) * 14, 2), true);
+      return true;
+    }
+    _setCd('ranged');
+    bot.pathfinder.setGoal(null);
+    const se = require('./skill-engine');
+    if (se.hasSkill('perfect_shot_bow')) {
+      se.runSkill(bot, 'perfect_shot_bow').catch(() => {});
+    } else {
+      try { await bot.equip(ranged.item, 'hand'); } catch (_) {}
+      shootAtEntity(bot, target).catch(() => {});
+    }
+    return true;
+  }
+
+  // ── Close in for melee ───────────────────────────────────────────────────
+  if (!_hasCd('close_in', 300)) {
+    _setCd('close_in');
+    equipBestMeleeWeapon(bot);
+    bot.pathfinder.setGoal(new GoalNear(target.position.x, target.position.y, target.position.z, 2), true);
+  }
+  return true;
+}
+
 // ── Smart melee attack ────────────────────────────────────────────────────────
 
 function startAttack(bot, username) {
   setBehavior(bot, 'attack', username);
   bot.chat('On it.');
   equipShield(bot);
-  equipBestMeleeWeapon(bot);
   const movements = createMovements(bot);
   bot.pathfinder.setMovements(movements);
-  let lastSwing = 0;
-  let shieldUp  = false;
-
-  const lowerShield = () => { if (shieldUp) { bot.deactivateItem(); shieldUp = false; } };
-  const raiseShield = () => { if (!shieldUp) { bot.activateItem(true); shieldUp = true; } }; // true = off-hand
+  let shieldUp = false;
+  const lower = () => { if (shieldUp) { bot.deactivateItem(); shieldUp = false; } };
+  const raise = () => { if (!shieldUp) { bot.activateItem(true); shieldUp = true; } };
 
   state.behaviorInterval = setInterval(async () => {
-    if (state.behaviorMode !== 'attack') { lowerShield(); return; }
-
-    // Retreat when critically low on health
-    if (bot.health <= 4) {
-      lowerShield();
-      bot.pathfinder.setGoal(null);
+    if (state.behaviorMode !== 'attack') { lower(); return; }
+    if (bot.health <= RETREAT_HP) {
+      lower(); bot.pathfinder.setGoal(null);
       bot.chat('I need to retreat!');
       setBehavior(bot, 'idle', username);
       return;
     }
-
-    const mob = bot.nearestEntity(e => isHostileMob(e) && e.position.distanceTo(bot.entity.position) < 24);
-    if (!mob) { bot.pathfinder.setGoal(null); lowerShield(); return; }
-
-    const dist = mob.position.distanceTo(bot.entity.position);
-    try {
-      if (dist > 3) {
-        lowerShield(); // lower while sprinting — shield slows movement
-        bot.pathfinder.setGoal(new GoalNear(mob.position.x, mob.position.y, mob.position.z, 2), true);
-      } else {
-        bot.pathfinder.setGoal(null);
-        raiseShield(); // raise as soon as mob is in melee range
-        await bot.lookAt(mob.position.offset(0, mob.height * 0.9, 0), true);
-        const now = Date.now();
-        if (now - lastSwing >= 500) {
-          bot.attack(mob);
-          lastSwing = now;
-        }
-      }
-    } catch (err) {
-      console.error('[NILO] Attack error:', err.message);
-    }
+    const engaged = await combatTick(bot, null);
+    if (!engaged) { lower(); bot.pathfinder.setGoal(null); return; }
+    // Shield up only when in melee range
+    const inMelee = bot.nearestEntity(e => isHostileMob(e) && e.position.distanceTo(bot.entity.position) <= MELEE_RANGE);
+    if (inMelee) raise(); else lower();
   }, 200);
 }
 
@@ -233,39 +322,87 @@ async function shootAtGazeTarget(bot) {
   return false;
 }
 
+// ── Assist mode — follow player and attack nearby hostiles ───────────────────
+
+function startAssist(bot, username) {
+  setBehavior(bot, 'assist', username);
+  equipShield(bot);
+  bot.chat('Covering you.');
+  const movements = createMovements(bot);
+  bot.pathfinder.setMovements(movements);
+  let shieldUp = false;
+  const lower = () => { if (shieldUp) { bot.deactivateItem(); shieldUp = false; } };
+  const raise = () => { if (!shieldUp) { bot.activateItem(true); shieldUp = true; } };
+
+  state.behaviorInterval = setInterval(async () => {
+    if (state.behaviorMode !== 'assist') { lower(); return; }
+    if (bot.health <= RETREAT_HP) {
+      lower(); bot.pathfinder.setGoal(null);
+      bot.chat('I need to retreat!');
+      setBehavior(bot, 'idle', username);
+      return;
+    }
+
+    const player = bot.players[username]?.entity;
+    if (!player) { bot.pathfinder.setGoal(null); return; }
+
+    // Search for targets around the PLAYER, not just the bot
+    const engaged = await combatTick(bot, player.position);
+    if (engaged) {
+      const inMelee = bot.nearestEntity(e => isHostileMob(e) && e.position.distanceTo(bot.entity.position) <= MELEE_RANGE);
+      if (inMelee) raise(); else lower();
+    } else {
+      // No mob — follow player
+      lower();
+      const dist = bot.entity.position.distanceTo(player.position);
+      if (dist > 4) {
+        bot.pathfinder.setGoal(new GoalNear(player.position.x, player.position.y, player.position.z, 3), true);
+      } else {
+        bot.pathfinder.setGoal(null);
+      }
+    }
+  }, 200);
+}
+
 // ── Bow combat mode ───────────────────────────────────────────────────────────
 
 function startBowMode(bot) {
-  const BOW_RANGE    = 26;
-  const OPTIMAL_DIST = 14; // preferred engagement distance
-  const KITE_DIST    = 6;  // back away if mob closer than this
+  const BOW_RANGE    = 48;
+  const OPTIMAL_DIST = 16;
+  const KITE_DIST    = 6;
 
   setBehavior(bot, 'bow', MASTER);
-  bot.chat('Bow ready.');
+
+  const ranged = equipBestRanged(bot);
+  if (!ranged) { bot.chat("I don't have a bow or arrows."); return; }
+  bot.chat('Archer mode. Keeping distance.');
 
   const movements = createMovements(bot);
   bot.pathfinder.setMovements(movements);
   let shooting = false;
+  let lastShot  = 0;
+  const SHOT_CD = 2200; // ms — minimum gap between shots regardless of skill speed
 
   state.behaviorInterval = setInterval(async () => {
     if (state.behaviorMode !== 'bow') return;
     if (shooting) return;
+    if (Date.now() - lastShot < SHOT_CD) return;
 
-    const hostile = Object.values(bot.entities).find(e =>
+    const hostile = bot.nearestEntity(e =>
       isHostileMob(e) && e.position.distanceTo(bot.entity.position) < BOW_RANGE
     );
 
     if (!hostile) { bot.pathfinder.setGoal(null); return; }
 
     if (!equipBestRanged(bot)) {
-      bot.chat('Out of arrows — going melee.');
+      bot.chat('Out of arrows — switching to melee.');
       startAttack(bot, MASTER);
       return;
     }
 
     const dist = hostile.position.distanceTo(bot.entity.position);
 
-    // Kite: too close — back off to optimal range
+    // Kite: too close — back off
     if (dist < KITE_DIST) {
       const p = bot.entity.position, m = hostile.position;
       const dx = p.x - m.x, dz = p.z - m.z;
@@ -276,7 +413,7 @@ function startBowMode(bot) {
       return;
     }
 
-    // Too far — close in
+    // Too far — close in to optimal range
     if (dist > BOW_RANGE * 0.85) {
       bot.pathfinder.setGoal(
         new GoalNear(hostile.position.x, hostile.position.y, hostile.position.z, OPTIMAL_DIST), true
@@ -284,13 +421,19 @@ function startBowMode(bot) {
       return;
     }
 
-    // In range — stop and shoot
+    // In range — shoot
     shooting = true;
+    lastShot  = Date.now();
     bot.pathfinder.setGoal(null);
     try {
-      await shootAtEntity(bot, hostile);
+      const se = require('./skill-engine');
+      if (se.hasSkill('perfect_shot_bow')) {
+        await se.runSkill(bot, 'perfect_shot_bow');
+      } else {
+        await shootAtEntity(bot, hostile);
+      }
       if (state.behaviorMode !== 'bow') { shooting = false; return; }
-      await new Promise(r => setTimeout(r, 400)); // brief cooldown between shots
+      await new Promise(r => setTimeout(r, 300));
     } catch (err) {
       console.error('[NILO] Bow error:', err.message);
     }
@@ -301,6 +444,8 @@ function startBowMode(bot) {
 module.exports = {
   HOSTILE_MOBS, isHostileMob,
   equipBestMeleeWeapon, equipBestRanged, hasBowAndArrows, equipShield,
+  combatTick,
   solveAimPoint, shootAtEntity, shootAtPosition, shootAtGazeTarget,
-  startAttack, startBowMode,
+  startAttack, startAssist, startBowMode,
+  MELEE_RANGE, RANGED_RANGE, RETREAT_HP, TOTEM_HP,
 };

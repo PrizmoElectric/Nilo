@@ -1,0 +1,9 @@
+Scan at 349, 64, 197  radius=4
+Timestamp: 2026-04-25T13:59:53.074Z
+
+Block                    Count
+-----------------------  -----
+dirt                       246
+grass_block                 79
+unknown(type:undefined)     56
+chiseled_bookshelf          13
