@@ -82,6 +82,15 @@ function buildStatusEmbed(bot) {
 // ── Discord → Minecraft command handler ──────────────────────────────────────
 
 async function handleDiscordMessage(message) {
+  state.discordContext = true;
+  try {
+    await _handleDiscordMessage(message);
+  } finally {
+    state.discordContext = false;
+  }
+}
+
+async function _handleDiscordMessage(message) {
   const bot      = _botRef;  // may be null if Nilo is offline
   const isMaster = message.author.id === DISCORD_MASTER_ID;
   const content  = message.content.trim();
@@ -215,7 +224,6 @@ async function handleDiscordMessage(message) {
       catch (err) { console.error('[DISCORD] handleNaturalCommand error:', err.message); }
 
       if (acted) {
-        await toDiscord(`> *${cleaned}* — done.`);
         state.lastInteractionTime = Date.now();
         return;
       }
@@ -241,7 +249,7 @@ async function handleDiscordMessage(message) {
         const raw = await queryLetta(ctx);
         const { text, action } = parseAction(raw);
         state.lastInteractionTime = Date.now();
-        if (text)   { bot.chat(text); await toDiscord(`**NILO:** ${text}`); }
+        if (text)   bot.chat(text);  // monkey-patch handles Discord, skips in-game (discordContext=true)
         if (action) dispatchAction(bot, action, MASTER);
       } else {
         ctx = `${sessionHintFor(MASTER)}${MASTER} says (via Discord, while I'm not in Minecraft): ${cleaned}\n[I am currently offline — not connected to any server. Respond in: ${lang}]`;
@@ -318,10 +326,12 @@ function attachBot(bot) {
   _botRef = bot;
   toDiscord('**NILO joined Minecraft.** Type `!status` to check in.');
 
-  // Nilo speaks in-game — mirror to Discord (suppress auth commands)
+  // Wrap bot.chat so responses go to the right place:
+  //   discordContext=false → in-game only, then mirror to Discord
+  //   discordContext=true  → Discord only (message came from Discord, don't echo back in-game)
   const origChat = bot.chat.bind(bot);
   bot.chat = function(text) {
-    origChat(text);
+    if (!state.discordContext) origChat(text);
     if (/^\/(login|register)\b/i.test(text)) return;
     toDiscord(`**NILO:** ${text}`);
   };

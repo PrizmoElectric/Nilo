@@ -2,11 +2,7 @@
 
 require('dotenv').config();
 
-// Prefix every log line with a timestamp
-['log', 'error', 'warn'].forEach(method => {
-  const orig = console[method].bind(console);
-  console[method] = (...args) => orig(`[${new Date().toLocaleTimeString()}]`, ...args);
-});
+require('./logger').install();
 
 const mineflayer = require('mineflayer');
 const { pathfinder }  = require('mineflayer-pathfinder');

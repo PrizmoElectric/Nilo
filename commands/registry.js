@@ -21,23 +21,47 @@ const IS_BLOCK_ALIAS = new RegExp(
 
 async function handle(bot, lower, raw) {
   if (IS_ECHO(lower) && /scan/.test(lower)) {
-    if (!state.scans.length) { bot.chat('No scan yet.'); return true; }
-    const numMatch = lower.match(/scan\s+(\d+)/);
-    const idx = numMatch ? parseInt(numMatch[1]) : 0;
-    if (idx >= state.scans.length) {
-      bot.chat(`Only ${state.scans.length} scan(s) available (0–${state.scans.length - 1}).`);
-      return true;
+    if (!state.scans.length) { bot.chat('No scans this session. Run "scan" first.'); return true; }
+
+    // Parse: "echo scan 0-9", "echo scan 3", "echo scan"
+    const rangeMatch  = lower.match(/scan\s+(\d+)-(\d+)/);
+    const singleMatch = lower.match(/scan\s+(\d+)/);
+
+    const chatLines = [];
+
+    if (rangeMatch) {
+      // Range: show one summary line per scan
+      const from = parseInt(rangeMatch[1]);
+      const to   = Math.min(parseInt(rangeMatch[2]), state.scans.length - 1);
+      if (from >= state.scans.length) {
+        bot.chat(`Only ${state.scans.length} scan(s) available (0–${state.scans.length - 1}).`);
+        return true;
+      }
+      chatLines.push(`Scans ${from}–${to} (0=latest):`);
+      for (let i = from; i <= to; i++) {
+        const { rows, radius, stamp } = state.scans[i];
+        const top = (rows || []).slice(0, 3).map(([n, c]) => `${n}:${c}`).join(', ');
+        chatLines.push(`[${i}] r=${radius} ${stamp} — ${top || 'empty'}`);
+      }
+    } else {
+      // Single scan (default 0)
+      const idx = singleMatch ? parseInt(singleMatch[1]) : 0;
+      if (idx >= state.scans.length) {
+        bot.chat(`Only ${state.scans.length} scan(s) available (0–${state.scans.length - 1}).`);
+        return true;
+      }
+      const { rows, radius, stamp } = state.scans[idx];
+      const label = idx === 0 ? 'scan 0 (latest)' : `scan ${idx}`;
+      chatLines.push(`${label} r=${radius} @ ${stamp}:`);
+      (rows || []).slice(0, 20).forEach(([n, c]) => chatLines.push(`  ${n}: ${c}`));
     }
-    const { rows, radius, stamp } = state.scans[idx];
-    const label = idx === 0 ? 'scan 0 (latest)' : `scan ${idx}`;
-    bot.chat(`${label} r=${radius} @ ${stamp}:`);
-    const lines = rows.slice(0, 20).map(([n, c]) => `${n}: ${c}`);
+
+    // Send one line per message, 250ms apart
     let i = 0;
     const send = () => {
-      if (i >= lines.length) return;
-      bot.chat(lines.slice(i, i + 3).join(' | '));
-      i += 3;
-      setTimeout(send, 300);
+      if (i >= chatLines.length) return;
+      bot.chat(chatLines[i++]);
+      setTimeout(send, 250);
     };
     send();
     return true;

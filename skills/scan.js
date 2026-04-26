@@ -15,44 +15,42 @@ async function runScan(bot, raw) {
 
   bot.chat(`Scanning ${radius}-block radius...`);
 
-  const pos    = bot.entity.position.floored();
-  const counts = {};
-  const SKIP   = new Set(['air', 'cave_air', 'void_air', 'unknown']);
+  const pos     = bot.entity.position.floored();
+  const counts  = {};   // name → count
+  const sidSets = {};   // name → Set of state IDs seen for that name
+  const AIR = new Set(['air', 'cave_air', 'void_air']);
 
-  // Triple loop to cover the radius
   for (let x = pos.x - radius; x <= pos.x + radius; x++) {
     for (let y = Math.max(-64, pos.y - radius); y <= Math.min(320, pos.y + radius); y++) {
       for (let z = pos.z - radius; z <= pos.z + radius; z++) {
-
         const pos3 = new Vec3(x, y, z);
-        const sid = bot.world.getBlockStateId(pos3);
-
-        // Immediate skip for air (ID 0) to save performance
+        const sid  = bot.world.getBlockStateId(pos3);
         if (sid === 0) continue;
 
         const b = bot.blockAt(pos3);
         let name;
-
-        // 1. Resolve Name: Registry -> Modded Mapper -> "unknown"
         if (b && b.name && b.name !== 'unknown' && b.name !== '') {
+          if (AIR.has(b.name)) continue;
           name = b.name;
         } else {
-          const modName = getModdedBlockName(sid);
-          name = modName || 'unknown';
+          name = getModdedBlockName(sid) || 'unknown';
         }
 
-        // 2. Filter out air types and persistent unknowns
-        if (SKIP.has(name)) continue;
-
-        // 3. Format the Key: Name + State ID (Crucial for debugging desyncs)
-        const key = `${name}(sid:${sid})`;
-
-        counts[key] = (counts[key] || 0) + 1;
+        counts[name]  = (counts[name]  || 0) + 1;
+        if (!sidSets[name]) sidSets[name] = new Set();
+        sidSets[name].add(sid);
       }
     }
   }
 
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  // Build rows: one entry per block name, sids appended for easy blockmap use
+  const sorted = Object.entries(counts)
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, count]) => {
+      const sids = [...sidSets[name]].sort((a, b) => a - b);
+      const sidLabel = sids.length === 1 ? `sid:${sids[0]}` : `sids:${sids.join(',')}`;
+      return [`${name} [${sidLabel}]`, count];
+    });
 
   if (!sorted.length) {
     bot.chat('Nothing around me (Check if chunks are loaded).');

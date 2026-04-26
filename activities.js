@@ -8,6 +8,7 @@ const { createMovements } = require('./movement');
 const { isBuildable } = require('./items');
 const { loadConfig } = require('./config');
 const { MASTER, MATURE_CROPS } = require('./config');
+const { getModdedBlockName, setManualOverride } = require('./registry-patch');
 
 // ── Farming ───────────────────────────────────────────────────────────────────
 
@@ -437,18 +438,36 @@ function startDance(bot) {
 // ── Sleep in bed ──────────────────────────────────────────────────────────────
 
 async function sleepInBed(bot) {
-  const bed = bot.findBlock({
+  // Primary search: vanilla registry name
+  let bed = bot.findBlock({
     matching: b => b.name.endsWith('_bed'),
     maxDistance: 48,
   });
+
+  // Fallback: search by modded-name mapping
+  if (!bed) {
+    bed = bot.findBlock({
+      matching: b => {
+        const mapped = getModdedBlockName(b.stateId);
+        return !!(mapped && mapped.endsWith('_bed'));
+      },
+      maxDistance: 48,
+    });
+    if (bed) {
+      // Fix the registry permanently — mineflayer's bot.sleep validates block.name
+      const mapped = getModdedBlockName(bed.stateId);
+      setManualOverride(bot, bed.stateId, mapped);
+      bed = bot.blockAt(bed.position); // re-fetch with patched registry
+      console.log(`[NILO] Fixed bed registry: stateId ${bed.stateId} → ${mapped}`);
+    }
+  }
+
   if (!bed) { bot.chat("I don't see a bed nearby."); return; }
 
   clearBehavior(bot);
   const bp = bed.position;
-  const movements = createMovements(bot);
-  bot.pathfinder.setMovements(movements);
+  bot.pathfinder.setMovements(createMovements(bot));
   try {
-    // Navigate to an adjacent block at the correct Y so we're in reach
     const adjacent = [
       new Vec3(bp.x + 1, bp.y, bp.z),
       new Vec3(bp.x - 1, bp.y, bp.z),
@@ -457,16 +476,11 @@ async function sleepInBed(bot) {
     ];
     let reached = false;
     for (const adj of adjacent) {
-      try {
-        await bot.pathfinder.goto(new GoalBlock(adj.x, adj.y, adj.z));
-        reached = true;
-        break;
-      } catch (_) {}
+      try { await bot.pathfinder.goto(new GoalBlock(adj.x, adj.y, adj.z)); reached = true; break; }
+      catch (_) {}
     }
-    if (!reached) {
-      await bot.pathfinder.goto(new GoalNear(bp.x, bp.y, bp.z, 2));
-    }
-    // Re-fetch bed block after navigation
+    if (!reached) await bot.pathfinder.goto(new GoalNear(bp.x, bp.y, bp.z, 2));
+
     const freshBed = bot.blockAt(new Vec3(bp.x, bp.y, bp.z));
     if (!freshBed || !freshBed.name.endsWith('_bed')) {
       bot.chat("I can't find the bed anymore.");

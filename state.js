@@ -17,6 +17,7 @@ const state = {
   behaviorInterval:      null,
   intentionalDisconnect: false,
   customWeapon:          null,  // modded weapon name set by "use X as weapon"
+  discordContext:        false, // true while handling a Discord message — bot.chat skips in-game
   scans:                 [],    // [{text, stamp, radius, rows}, ...] newest first — for echo
 };
 
