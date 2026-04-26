@@ -1,3 +1,4 @@
+const Vec3 = require('vec3');
 const state = require('../state');
 const { getModdedBlockName, setManualOverride, getStateIdsByName } = require('../registry-patch');
 const { runScan } = require('../skills/scan');
@@ -11,6 +12,8 @@ const IS_SCAN_BLOCKS = cmd([
 ]);
 const IS_ECHO       = cmd([/\becho\b/, /\brepeat (?:the )?last\b/, /\brepete\b/]);
 const IS_BLOCK_MAP  = cmd([/\bblockmap\b/, /\bmap stateId\b/, /\bidentify block\b/, /\bmapeia bloco\b/]);
+// "id 1974", "where is id 1974", "find id 1974", "locate stateId 1974"
+const IS_ID_LOCATE  = cmd([/\bid\s+\d+/, /\bwhere is\s+(id|stateid)\s+\d+/, /\b(find|locate)\s+(id|stateid)\s+\d+/]);
 
 // Matches "<blockname> is [actually] <blockname>" for conversational remapping.
 // Block names: lowercase letters/underscores, optional namespace (word:word).
@@ -69,6 +72,50 @@ async function handle(bot, lower, raw) {
 
   if (IS_SCAN_BLOCKS(lower)) {
     runScan(bot, raw).catch(err => console.error('[SCAN] error:', err.message));
+    return true;
+  }
+
+  if (IS_ID_LOCATE(lower)) {
+    const m = raw.match(/\b(\d+)\b/);
+    if (!m) { bot.chat('Usage: id <stateId>'); return true; }
+    const targetSid = parseInt(m[1]);
+
+    const pos    = bot.entity.position.floored();
+    const radius = 32;
+    const hits   = [];
+
+    for (let x = pos.x - radius; x <= pos.x + radius && hits.length < 20; x++) {
+      for (let y = Math.max(-64, pos.y - radius); y <= Math.min(320, pos.y + radius) && hits.length < 20; y++) {
+        for (let z = pos.z - radius; z <= pos.z + radius && hits.length < 20; z++) {
+          const sid = bot.world.getBlockStateId(new Vec3(x, y, z));
+          if (sid === targetSid) hits.push({ x, y, z });
+        }
+      }
+    }
+
+    if (!hits.length) {
+      bot.chat(`No block with stateId ${targetSid} found within ${radius} blocks.`);
+      return true;
+    }
+
+    // Sort by distance from bot
+    hits.sort((a, b) => {
+      const da = Math.hypot(a.x - pos.x, a.y - pos.y, a.z - pos.z);
+      const db = Math.hypot(b.x - pos.x, b.y - pos.y, b.z - pos.z);
+      return da - db;
+    });
+
+    const name    = getModdedBlockName(targetSid) || bot.blockAt(new Vec3(hits[0].x, hits[0].y, hits[0].z))?.name || 'unknown';
+    const chatLines = [`stateId ${targetSid} (${name}) — ${hits.length} hit(s):`];
+    for (const { x, y, z } of hits.slice(0, 10)) {
+      const dist = Math.round(Math.hypot(x - pos.x, y - pos.y, z - pos.z));
+      chatLines.push(`  ${x} ${y} ${z}  (${dist}m away)`);
+    }
+    if (hits.length > 10) chatLines.push(`  ...and ${hits.length - 10} more.`);
+
+    let i = 0;
+    const send = () => { if (i >= chatLines.length) return; bot.chat(chatLines[i++]); setTimeout(send, 250); };
+    send();
     return true;
   }
 
