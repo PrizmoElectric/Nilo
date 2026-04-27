@@ -5,6 +5,7 @@ An AI Minecraft bot for Mineflayer powered by a Letta memory agent. NILO lives i
 ## Features
 
 - Natural language commands via in-game chat
+- Uses .[Mineflayer](https://github.com/prismarinejs/mineflayer) for navigation and better uderstanding of the world around him.
 - AI brain powered by [Letta](https://letta.ai) (persistent memory and reasoning)
 - Autonomous behaviors: farming, combat, pathfinding, crafting
 - Discord bridge — chat with NILO from Discord
