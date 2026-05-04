@@ -6,9 +6,9 @@ const state  = require('./state');
 const { setBehavior, clearBehavior } = require('./behavior');
 const { createMovements } = require('./movement');
 const { isBuildable } = require('./items');
-const { loadConfig } = require('./config');
-const { MASTER, MATURE_CROPS } = require('./config');
+const { loadConfig, MASTER, MATURE_CROPS } = require('./config');
 const { getModdedBlockName, setManualOverride } = require('./registry-patch');
+const { resolveBlock } = require('./blockresolver');
 
 // ── Farming ───────────────────────────────────────────────────────────────────
 
@@ -30,7 +30,6 @@ async function runFarm(bot) {
 
   try {
     const { farm, chest } = cfg;
-    const mcData    = require('minecraft-data')(bot.version);
     const movements = createMovements(bot);
     bot.pathfinder.setMovements(movements);
 
@@ -50,9 +49,6 @@ async function runFarm(bot) {
 
     const matureBlocks = [];
     for (const [cropName, { age }] of Object.entries(MATURE_CROPS)) {
-      const blockType = mcData.blocksByName[cropName];
-      if (!blockType) continue;
-
       const found = bot.findBlocks({
         matching: (block) => block.name === cropName && block.getProperties().age === age,
         maxDistance: 128,
@@ -112,11 +108,14 @@ async function runFarm(bot) {
 async function collectGrave(bot) {
   clearBehavior(bot);
 
+  const graveResolved = resolveBlock(bot, 'yigd:grave');
+  const graveBlockId  = graveResolved?.id ?? null;
+
   function isGraveBlock(b) {
     const name = (b.name ?? '').toLowerCase();
     if (name === 'gravel') return false;
-    // Direct stateId match for yigd:grave (fallback before registry is patched)
-    if (b.stateId === 588209) return true;
+    // Resolve yigd:grave by registry id (works regardless of stateId reordering)
+    if (graveBlockId !== null && b.type === graveBlockId) return true;
     // Named modded blocks
     if (name.includes(':') && (name.includes('grave') || name.includes('tombstone') || name.includes('coffin') || name.includes('soulstone'))) return true;
     if (['gravestone','tombstone'].some(k => name.includes(k))) return true;
@@ -486,7 +485,23 @@ async function sleepInBed(bot) {
       bot.chat("I can't find the bed anymore.");
       return;
     }
-    await bot.sleep(freshBed);
+    if (bot.isABed(freshBed)) {
+      await bot.sleep(freshBed);
+    } else {
+      // Modded bed: name ends with _bed but isn't in mineflayer's vanilla set.
+      // Skip bot.sleep() guard and activate directly.
+      const thunderstorm = bot.isRaining && (bot.thunderState > 0);
+      if (!thunderstorm && !(bot.time.timeOfDay >= 12541 && bot.time.timeOfDay <= 23458)) {
+        throw new Error("it's not night");
+      }
+      if (bot.isSleeping) throw new Error('already sleeping');
+      const sleeping = new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('no sleep event')), 4000);
+        bot.once('sleep', () => { clearTimeout(t); resolve(); });
+      });
+      bot.activateBlock(freshBed);
+      await sleeping;
+    }
     bot.chat('Goodnight...');
   } catch (err) {
     bot.chat(`Can't sleep: ${err.message}`);
@@ -573,7 +588,7 @@ async function writeSign(bot, text) {
 
 module.exports = {
   runFarm, collectGrave, startFishing,
-  tryPlaceBlock, buildSimpleHouse,
+  buildSimpleHouse,
   startDance, sleepInBed,
   writeSign, wrapSignText,
 };

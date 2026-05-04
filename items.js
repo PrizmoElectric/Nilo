@@ -79,5 +79,5 @@ function isBuildable(item) {
 module.exports = {
   getEquipDestination, isWeapon, isEquippable,
   getInventorySummary, pickupNearestItem,
-  BUILDABLE_KEYWORDS, isBuildable,
+  isBuildable,
 };

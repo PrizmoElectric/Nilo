@@ -210,7 +210,7 @@
     "name": "guard",
     "description": "guard current position, attacking nearby hostile mobs using mineflayer-pvp",
     "file": "guard.js",
-    "successes": 4,
+    "successes": 5,
     "failures": 0,
     "created": "2026-04-23",
     "updated": "2026-04-23"
@@ -219,7 +219,7 @@
     "name": "perfect_shot_bow",
     "description": "fire a single precisely-aimed shot at the nearest mob or player using minecrafthawkeye ballistics",
     "file": "perfect_shot_bow.js",
-    "successes": 62,
+    "successes": 99,
     "failures": 0,
     "created": "2026-04-23",
     "updated": "2026-04-23"

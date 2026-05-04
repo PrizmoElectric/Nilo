@@ -1,0 +1,56 @@
+The Golden Rule of Mineflayer: Never Hardcode Numbers
+
+Because numerical IDs change between versions (and dynamically in modpacks), you should never type stateId: 1450 into your bot's code.
+
+You must translate the string name into the numerical ID inside your code using Mineflayer's internal registry.
+1. How to get the ID for Vanilla Blocks
+
+Mineflayer has minecraft-data built-in, which already knows the protocol numbers for vanilla blocks for 1.20.1. You access it through bot.registry.
+
+1. How to get the ID for Vanilla Blocks
+
+Mineflayer has minecraft-data built-in, which already knows the protocol numbers for vanilla blocks for 1.20.1. You access it through bot.registry.
+
+If you need the numerical ID to feed into a pathfinder or bot.findBlocks, do this:
+JavaScript
+
+// Get the block data using the string name (without the "minecraft:" prefix)
+const targetBlock = bot.registry.blocksByName['zombie_head'];
+
+// targetBlock.id is the numerical "type" Mineflayer uses
+console.log(`The numerical ID for Zombie Head is: ${targetBlock.id}`);
+
+// Example: Finding the block
+const blocks = bot.findBlocks({
+  matching: targetBlock.id,
+  maxDistance: 32,
+  count: 1
+});
+
+2. The Modded Block Problem (Ad Astra, etc.)
+
+This is where bot development gets highly complex. Mineflayer is designed for Vanilla. It does not know what ad_astra:aeronos_cap is, so bot.registry.blocksByName['aeronos_cap'] will return undefined.
+
+When your bot joins a Fabric server, the server sends a "Registry Sync" packet that assigns dynamic numerical IDs to all the modded blocks. Mineflayer ignores this packet by default.
+
+How to handle modded blocks:
+You have to use a block's string name dynamically when you scan the world, rather than looking for a specific ID. You can pass a function to matching instead of an ID number:
+JavaScript
+
+// Find a block by checking its string name as the bot scans the world
+const moddedBlocks = bot.findBlocks({
+  matching: (block) => {
+    // block.name will contain the string ID (e.g., 'aeronos_cap')
+    return block.name === 'aeronos_cap';
+  },
+  maxDistance: 32,
+  count: 1
+});
+
+Summary:
+
+    Throw away the idea of finding static numerical IDs. They are a phantom network construct.
+
+    For vanilla blocks, use bot.registry.blocksByName['block_name'].id in your code to get the number Mineflayer wants. (do not apply this one, i already developed something similar)
+
+    For modded blocks, use the matching: (block) => block.name === 'modded_name' function technique, as Mineflayer's registry won't know the modded IDs. (maybe it could work, need to test it later)

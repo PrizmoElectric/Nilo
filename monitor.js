@@ -7,8 +7,8 @@ const state    = require('./state');
 const { setBehavior } = require('./behavior');
 const { createMovements } = require('./movement');
 const { isHostileMob } = require('./combat');
-const { queryLetta, parseAction } = require('./letta');
-const { MASTER, LOG_PATH, BOT_USERNAME, DEATH_VERBS, ADVANCEMENT_RE, JOIN_RE, LEAVE_RE } = require('./config');
+const { queryLetta, parseAction, chatLong } = require('./letta');
+const { MASTER, BOT_USERNAME, DEATH_VERBS, ADVANCEMENT_RE, JOIN_RE, LEAVE_RE, getServerConfig } = require('./config');
 const { goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
 
 // ── Session hint ──────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ function startProximityMonitor(bot) {
           `${sessionHintFor(MASTER)}[HEALTH EVENT] Your current health is ${bot.health}/20. React briefly in character — you feel unwell.\n[Respond in: en]`
         );
         const { text: healthText } = parseAction(response);
-        if (healthText) bot.chat(healthText);
+        if (healthText) await chatLong(bot, healthText);
       } catch (_) {}
     }
     if (bot.health > LOW_HEALTH) lowHealthWarned = false;
@@ -72,7 +72,7 @@ function startProximityMonitor(bot) {
           const names = [...new Set(newThreats.map(e => e.name))].join(', ');
           queryLetta(
             `${sessionHintFor(MASTER)}[THREAT EVENT] You just spotted hostile mob(s) nearby: ${names}. React briefly — a quick warning or tense observation.\n[Respond in: en]`
-          ).then(r => { const { text: t } = parseAction(r); if (t) bot.chat(t); }).catch(() => {});
+          ).then(r => { const { text: t } = parseAction(r); if (t) chatLong(bot, t); }).catch(() => {});
         }
         knownThreats = new Set(nearbyHostiles.map(e => e.id));
       }
@@ -94,7 +94,7 @@ function startProximityMonitor(bot) {
             `${sessionHintFor(MASTER)}[PROXIMITY EVENT] PrizmoElectric just came within ${Math.floor(dist)} blocks of you. Greet them briefly in character.\n[Respond in: en]`
           );
           const { text: greetText } = parseAction(response);
-          if (greetText) bot.chat(greetText);
+          if (greetText) await chatLong(bot, greetText);
         } catch (_) {}
       }
     }
@@ -108,7 +108,7 @@ function startProximityMonitor(bot) {
             `${sessionHintFor(MASTER)}[PROXIMITY EVENT] PrizmoElectric moved far away and you're having trouble keeping up while following them. Say something brief in character.\n[Respond in: en]`
           );
           const { text: followText } = parseAction(response);
-          if (followText) bot.chat(followText);
+          if (followText) await chatLong(bot, followText);
         } catch (_) {}
       }
     }
@@ -171,7 +171,7 @@ function startAutonomousBehaviors(bot) {
           `Contents: ${preview}. React briefly in character — curiosity, excitement, or disappointment.\n[Respond in: en]`
         );
         const { text: chestText } = parseAction(response);
-        if (chestText) bot.chat(chestText);
+        if (chestText) await chatLong(bot, chestText);
       } catch (err) {
         console.error('[NILO] Chest loot error:', err.message);
       }
@@ -244,19 +244,25 @@ function handleLogEvent(payload) {
     .then((response) => {
       const { text } = parseAction(response);
       console.log(`[NILO] -> ${text}`);
-      if (text) bot.chat(text);
+      if (text) chatLong(bot, text);
     })
     .catch((err) => { console.error('[NILO] Letta error on log event:', err.message); });
 }
 
 function watchLog() {
-  let fileSize = 0;
-  try { fileSize = fs.statSync(LOG_PATH).size; } catch (_) {}
+  const logPath = getServerConfig().log_path;
+  if (!logPath) {
+    console.log('[NILO] No log_path configured for this server — log watching disabled.');
+    return;
+  }
 
-  fs.watchFile(LOG_PATH, { interval: 1000 }, (curr) => {
+  let fileSize = 0;
+  try { fileSize = fs.statSync(logPath).size; } catch (_) {}
+
+  fs.watchFile(logPath, { interval: 1000 }, (curr) => {
     if (curr.size <= fileSize) { fileSize = curr.size; return; }
 
-    const stream = fs.createReadStream(LOG_PATH, { start: fileSize, end: curr.size - 1 });
+    const stream = fs.createReadStream(logPath, { start: fileSize, end: curr.size - 1 });
     fileSize = curr.size;
 
     const rl = readline.createInterface({ input: stream });
@@ -267,11 +273,11 @@ function watchLog() {
     });
   });
 
-  console.log(`[NILO] Watching log: ${LOG_PATH}`);
+  console.log(`[NILO] Watching log: ${logPath}`);
 }
 
 module.exports = {
   sessionHintFor,
   startProximityMonitor, startAutonomousBehaviors, startSkillAutonomyTicker,
-  watchLog, handleLogEvent,
+  watchLog,
 };

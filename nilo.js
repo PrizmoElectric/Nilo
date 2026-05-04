@@ -18,16 +18,17 @@ const skillEngine = require('./skill-engine');
 const { installRegistryPatch, setManualOverride } = require('./registry-patch');
 
 const state   = require('./state');
-const { BOT_USERNAME, MASTER, HOST, PORT, MC_VERSION,
+const { BOT_USERNAME, MASTER, getServerConfig, setActiveServer, loadServers,
         loadConfig, saveConfig } = require('./config');
 const { isTrusted, trustPlayer, untrustPlayer, listTrusted } = require('./trust');
 const { detectLanguage }   = require('./lang');
-const { queryLetta, parseAction } = require('./letta');
+const { queryLetta, parseAction, chatLong } = require('./letta');
 const { getInventorySummary }    = require('./items');
 const { setBehavior, clearBehavior } = require('./behavior');
 const { buildOpenableIds, createMovements, installDoorOpener, tryUnstuck, applyServerBlockOverrides } = require('./movement');
 const { equipShield, equipBestMeleeWeapon } = require('./combat');
 const { collectGrave, runFarm, writeSign, wrapSignText } = require('./activities');
+const { installEasyAuth } = require('./easyauth');
 const { startProximityMonitor, startAutonomousBehaviors, startSkillAutonomyTicker, watchLog } = require('./monitor');
 const { sessionHintFor } = require('./monitor');
 const { handleNaturalCommand } = require('./commands');
@@ -40,12 +41,13 @@ const PROXIMITY_CHAT_RANGE   = 12;    // blocks — within this range, no trigge
 // ── Bot creation ──────────────────────────────────────────────────────────────
 
 function createBot() {
+  const { host, port, version, auth } = getServerConfig();
   const bot = mineflayer.createBot({
-    host: HOST,
-    port: PORT,
+    host,
+    port,
     username: BOT_USERNAME,
-    version: MC_VERSION,
-    auth: 'offline',
+    version,
+    auth: auth || 'offline',
   });
 
   bot.loadPlugin(pathfinder);
@@ -65,13 +67,23 @@ function createBot() {
   bot._client.removeAllListeners('login_plugin_request');
 
   bot._client.on('login_plugin_request', (packet) => {
+    const bytes = packet.data?.length ?? 0;
+    const hex   = bytes <= 16 ? (packet.data?.toString('hex') ?? '') : '';
+    console.log(`[HANDSHAKE] login_plugin_request: ${packet.channel} (${bytes}b${hex ? ' 0x' + hex : ''})`);
+
     let responseData = null;
 
     if (packet.channel === 'fabric-networking-api-v1:early_registration' && packet.data) {
+      // Echo the registry list back so Fabric accepts our block/item registrations.
       responseData = packet.data;
-    } else if (packet.channel === 'forgeconfigapiport:modded_connection') {
+    } else if (packet.channel === 'owo:handshake') {
+      // oωo response: empty channel map (0x00) + version/compat byte (0x01)
+      responseData = Buffer.from([0x00, 0x01]);
+    } else if (packet.channel.startsWith('forgeconfigapiport:')) {
+      // forgeconfigapiport sends config blobs; just acknowledge with empty bytes.
       responseData = Buffer.alloc(0);
     }
+    // All other channels: null = "not supported by this client"
 
     bot._client.write('login_plugin_response', {
       messageId: packet.messageId,
@@ -79,12 +91,11 @@ function createBot() {
     });
   });
 
-  const NILO_PASSWORD = 'nilo123';
-
   // ── Login ─────────────────────────────────────────────────────────────────
 
   bot.on('login', () => {
-    console.log(`[NILO] Connected to ${HOST}:${PORT} as ${BOT_USERNAME}`);
+    const sc = getServerConfig();
+    console.log(`[NILO] Connected to ${sc.host}:${sc.port} (${sc.version}) as ${BOT_USERNAME}`);
     state.activeBotRef = bot;
 
     // Patch server-specific block behaviours (floor tiles, etc.) once.
@@ -189,7 +200,6 @@ function createBot() {
 
       console.log('[NILO] Blank sign detected — asking Letta for text...');
       try {
-        const { queryLetta, parseAction } = require('./letta');
         const raw = await queryLetta(
           `A blank sign was just placed nearby. Write something short and in-character ` +
           `for a sign (max 4 lines, 15 chars per line). Reply with ONLY the sign text, ` +
@@ -207,16 +217,7 @@ function createBot() {
     });
   });
 
-  // ── Auth messages ─────────────────────────────────────────────────────────
-
-  bot.on('message', (jsonMsg) => {
-    const text = jsonMsg.toString().toLowerCase();
-    if (text.includes('register') && text.includes('/register')) {
-      bot.chat(`/register ${NILO_PASSWORD} ${NILO_PASSWORD}`);
-    } else if (text.includes('login') && text.includes('/login')) {
-      bot.chat(`/login ${NILO_PASSWORD}`);
-    }
-  });
+  installEasyAuth(bot);
 
   // ── Chat handler ──────────────────────────────────────────────────────────
 
@@ -237,7 +238,7 @@ function createBot() {
     // Natural language assistance for MASTER — no trigger word needed
     if (username === MASTER) {
       let acted = false;
-      try { acted = await handleNaturalCommand(bot, lower, message); }
+      try { acted = await handleNaturalCommand(bot, lower, message, username); }
       catch (err) { console.error('[NILO] handleNaturalCommand error:', err.message); }
       if (acted) { state.lastInteractionTime = Date.now(); return; }
     }
@@ -432,7 +433,7 @@ function createBot() {
       const { text, action } = parseAction(raw);
       console.log(`[NILO] -> ${text}${action ? ` [ACTION: ${action}]` : ''}`);
       state.lastInteractionTime = Date.now();
-      if (text)   bot.chat(text);
+      if (text)   await chatLong(bot, text);
       if (action) dispatchAction(bot, action, username);
     } catch (err) {
       console.error('[NILO] Letta error:', err.message);
@@ -504,6 +505,21 @@ function createBot() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+
+// Parse --server=<name> or --server <name> from CLI
+const serverArgIdx = process.argv.findIndex(a => a === '--server' || a.startsWith('--server='));
+if (serverArgIdx !== -1) {
+  const arg = process.argv[serverArgIdx];
+  const name = arg.includes('=') ? arg.split('=')[1] : process.argv[serverArgIdx + 1];
+  if (name) {
+    try { setActiveServer(name); }
+    catch (e) {
+      console.error('[SERVER] ' + e.message);
+      const servers = loadServers();
+      console.error('[SERVER] Available profiles:', Object.keys(servers).join(', ') || '(none in servers.json)');
+    }
+  }
+}
 
 watchLog();
 startDiscord();   // Discord up immediately — works even before Minecraft connects

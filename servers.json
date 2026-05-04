@@ -1,0 +1,18 @@
+{
+  "prominence2": {
+    "description": "Local Prominence II modpack (Fabric 1.20.1)",
+    "host": "localhost",
+    "port": 25565,
+    "version": "1.20.1",
+    "auth": "offline",
+    "log_path": "/home/prizmo/mc-prominence2/data/logs/latest.log"
+  },
+  "private": {
+    "description": "Private Prominence II server",
+    "host": "localhost",
+    "port": 43457,
+    "version": "1.20.1",
+    "auth": "offline",
+    "log_path": "/home/prizmo/mc-prominence2/data/logs/latest.log"
+  }
+}

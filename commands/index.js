@@ -22,9 +22,9 @@ const handlers = [
   misc,
 ];
 
-async function handleNaturalCommand(bot, lower, raw) {
+async function handleNaturalCommand(bot, lower, raw, username) {
   for (const h of handlers) {
-    const result = await h.handle(bot, lower, raw);
+    const result = await h.handle(bot, lower, raw, username);
     if (result) return true;
   }
   return false;

@@ -1,7 +1,7 @@
 # Nilo — Architecture Map
 
 > Quick reference for AI agents. Read this before touching any module.
-> Last updated: 2026-04-25
+> Last updated: 2026-05-04
 
 ---
 
@@ -16,51 +16,75 @@ Nilo is a Mineflayer-based Minecraft bot running on a **Fabric 1.20.1** server (
 
 ## Identity & Key Constants (`config.js`)
 
-| Constant | Value | Purpose |
-|---|---|---|
-| `BOT_USERNAME` | `NILO` | In-game name |
-| `MASTER` | `PrizmoElectric` | Owner — full control, no trigger word needed |
-| `HOST / PORT` | `localhost:25565` | Server address |
-| `MC_VERSION` | `1.20.1` | Protocol version |
-| `LETTA_URL` | env var `LETTA_URL` | Letta memory agent endpoint |
-| `LOG_PATH` | `/home/prizmo/mc-prominence2/data/logs/latest.log` | Server log (watched for events) |
-| `CONFIG_PATH` | `/home/prizmo/nilo/config.json` | Persisted runtime config (farm coords, trust list) |
+| Constant / Function | Value / Purpose |
+|---|---|
+| `BOT_USERNAME` | `NILO` — in-game name |
+| `MASTER` | `PrizmoElectric` — owner, full control, no trigger word |
+| `LETTA_URL` | env var `LETTA_URL` — Letta memory agent endpoint |
+| `CONFIG_PATH` | `/home/prizmo/nilo/config.json` — persisted runtime config |
+| `SERVERS_PATH` | `servers.json` — named server profiles |
+| `getServerConfig()` | Returns active server's `{host, port, version, auth, log_path}` |
+| `getActiveServerName()` | Returns name of the active profile (e.g. `'prominence2'`) |
+| `setActiveServer(name)` | Switches active profile; throws if name not in servers.json |
+| `addServer(name, cfg)` | Adds/updates a profile in servers.json |
+| `loadServers()` | Reads servers.json; returns all profiles |
+
+**`servers.json`** — each entry: `{ host, port, version, auth, log_path, description }`. Default profile: `prominence2`. Switch with `--server=<name>` CLI flag or in-game "switch server \<name\>".
 
 ---
 
 ## Module Map
 
 ```
-nilo.js              Entry point. Creates bot, wires all events, boots log watcher.
+nilo.js              Entry point. Creates bot from getServerConfig(), wires all events.
+│                    Handles --server=<name> CLI flag. Fabric login_plugin_request handler
+│                    (owo:handshake, forgeconfigapiport). Boots log watcher.
 ├── state.js         Shared mutable state object. Single source of truth for runtime vars.
-├── config.js        Constants + loadConfig/saveConfig (raw JSON file I/O only).
+├── config.js        Constants + server profile helpers (getServerConfig, setActiveServer,
+│                    addServer, loadServers). loadConfig/saveConfig for runtime config.
+├── servers.json     Named server profiles. Loaded by config.js at runtime.
+├── db.js            SQLite knowledge base (nilo.db). Tables: state_ids, blocks, entities,
+│                    locations, learned. One-time migration from modded-state-ids.json on first run.
+├── blockresolver.js Safe block resolution using bot.registry (runtime, never hardcoded IDs).
+│                    resolveBlock, getStateIdAt, findNearestBlock, searchRegistry.
+│                    Use this instead of minecraft-data for any block lookup.
+├── easyauth.js      installEasyAuth(bot) — listens for /register or /login prompts and
+│                    auto-responds. Reads password from NILO_PASSWORD env var.
 ├── trust.js         Trust management: isTrusted, trustPlayer, untrustPlayer, listTrusted.
 ├── lang.js          detectLanguage(text) → 'en' | 'pt-BR'
 ├── letta.js         queryLetta(msg) → string. parseAction(raw) → {text, action}.
+│                    chatLong(bot, text) — splits long replies into ≤256-char chat messages.
 ├── behavior.js      setBehavior(bot, mode, username). clearBehavior(bot).
 ├── movement.js      createMovements, installDoorOpener, startFollow, tryUnstuck.
 ├── items.js         Inventory helpers: getEquipDestination, isEquippable, pickupNearestItem, isBuildable.
 ├── gaze.js          getPlayerGazeTarget(bot, maxDist) → {block, entity, position}. On-demand raycast from MASTER's eye.
-├── combat.js        isHostileMob, weapon helpers, startAttack, startBowMode, combatTick.
-│                    shootAtEntity, shootAtPosition, shootAtGazeTarget, solveAimPoint.
+├── combat.js        isHostileMob (checks DB entities table first), weapon helpers, startAttack,
+│                    startBowMode, combatTick, shootAtEntity, shootAtPosition, shootAtGazeTarget, solveAimPoint.
 ├── activities.js    runFarm, collectGrave, startFishing, buildSimpleHouse, startDance, sleepInBed.
 ├── monitor.js       startProximityMonitor, startAutonomousBehaviors, startSkillAutonomyTicker, watchLog.
-├── commands/        Modular command handlers — each exports handle(bot, lower, raw) → bool
-│   ├── index.js     Iterates handlers in order, first match wins.
+├── commands/        Modular command handlers — each exports handle(bot, lower, raw, username) → bool
+│   ├── index.js     Iterates handlers in order, first match wins. Passes username through.
 │   ├── navigation.js  follow, come, closer, unstuck, stop, stay, sit, wander, explore
 │   ├── combat.js    attack, defensive, passive, bow, shoot_target, assist/defend
 │   ├── activities.js  fish, farm, build, sleep, dance, collect grave
-│   ├── physical.js  jump, move dir, sprint, spin, wave, crouch, stand, look dir
+│   ├── physical.js  jump, move dir, sprint, spin, wave, crouch, stand, look dir,
+│   │                look at me for # [sec] (50ms gaze track, auto-stops)
 │   ├── inventory.js equip, unequip, drop, give, eat
 │   ├── crafting.js  craft, smelt, what can I craft, ensure tools
 │   ├── skills.js    learn, do, forget, list skills, queue goal, autonomous on/off
 │   ├── trust.js     trust, untrust, who do you trust
-│   ├── registry.js  scan [radius], echo scan, blockmap <stateId> <mod:block>
-│   ├── misc.js      say/repeat passthrough, click block at coords, look at me
+│   ├── registry.js  scan, echo scan, blockmap, id <stateId>, X is Y (block alias),
+│   │                X is hostile / not hostile, what do you know about X,
+│   │                X is solid / X is passable (block physics teaching)
+│   ├── misc.js      say/repeat passthrough, restart,
+│   │                this/what is this (block shows name+pos+[sid:N], entity shows kind+hostile+hp),
+│   │                list servers, current server, switch server <name>, save server as <name>
 │   └── _util.js     cmd() helper — wraps regex array into a matcher function
 ├── actions.js       dispatchAction (LLM action → function call). runCommand (chat_command packet).
 ├── skill-engine.js  Voyager-style skill system: learnSkill, runSkill, autonomousTick, curriculum.
-├── registry-patch.js  Auto-maps Fabric modded block state IDs to names. See section below.
+├── registry-patch.js  Auto-maps Fabric modded block state IDs to names. Backed by nilo.db.
+│                    Physics resolution: blocks DB table → BLOCK_PHYSICS → heuristic.
+│                    setManualBlockPhysics(bot, name, isSolid) — taught conversationally.
 └── skills/          Pre-built and LLM-generated skill JS files + manifest.json.
     ├── scan.js         runScan(bot, raw) — block frequency scan, saves to scans/, updates state.lastScan
     ├── guard.js        guard skill — patrols a post, delegates combat to combatTick
@@ -75,16 +99,19 @@ nilo.js              Entry point. Creates bot, wires all events, boots log watch
 ### Dependency order (no circular deps)
 
 ```
-state ← config ← trust
-                  lang
-                  letta
-      ← behavior ← movement ← items
-                             ← gaze
-                             ← combat
-                             ← activities
-                             ← monitor
-                             ← commands/ ← actions
-                  registry-patch (standalone, no bot deps at import time)
+state ← config (+ servers.json) ← trust
+                                   lang
+                                   letta
+         ← behavior ← movement ← items
+                               ← gaze
+                               ← combat
+                               ← activities
+                               ← monitor
+                               ← commands/ ← actions
+         blockresolver  (standalone utility — require it where needed)
+         easyauth       (standalone — call installEasyAuth(bot) in nilo.js)
+         registry-patch (standalone, no bot deps at import time)
+         db             (standalone singleton — require anywhere)
 ```
 
 Each module only imports from modules above it in the chain. `nilo.js` imports everything.
@@ -182,8 +209,8 @@ All handled **before** Letta. MASTER only (no prefix needed). Matched in order.
 | Crafting | crafting.js | craft \<item\>, smelt \<item\>, what can I craft, ensure tools |
 | Skills | skills.js | learn \<task\>, do \<skill\>, forget \<skill\>, list skills, queue \<task\>, autonomous on/off |
 | Trust | trust.js | trust \<name\>, untrust \<name\>, who do you trust |
-| Registry | registry.js | scan [radius], echo scan, blockmap \<stateId\> \<mod:block\> |
-| Misc | misc.js | say \<text\>, repeat after me, click/press at X Y Z, look at me |
+| Registry | registry.js | scan [radius], echo scan, blockmap \<stateId\> \<mod:block\>, X is solid/passable |
+| Misc | misc.js | say \<text\>, restart, this/what is this, list servers, switch server \<name\> |
 
 Portuguese (pt-BR) variants exist for most commands.
 
@@ -192,6 +219,8 @@ Portuguese (pt-BR) variants exist for most commands.
 ## Letta Integration (`letta.js`)
 
 **`queryLetta(userMessage)`** — POST to LETTA_URL, returns the first `assistant_message` content string (emojis stripped).
+
+**`chatLong(bot, text)`** — sends `text` as one or more chat messages, splitting at ≤256 chars on word boundaries. Used by nilo.js for all Letta replies.
 
 **Context sent** always includes:
 - Session hint (`[NEW SESSION]` if >5 min idle)
@@ -232,18 +261,14 @@ Handles Fabric modded blocks that vanilla mineflayer can't recognize.
 5. Confidence: `high` (segments == blocks), `medium` (fewer), `low` (more)
 6. Patches `bot.registry.blocksByStateId` so `bot.blockAt()` returns correct names
 
-**Persistence files:**
-| File | Purpose |
-|---|---|
-| `modded-blocks-mapping.json` | Auto-generated results — do not edit |
-| `modded-state-ids.json` | Manual overrides — highest priority |
-| `modded-blocks-uncertain.log` | Medium/low confidence entries — review these |
+**Persistence:** all state IDs and overrides stored in `nilo.db` (state_ids table).
+Manual overrides from the old `modded-state-ids.json` were migrated to nilo.db on first run.
 
 **Exports:**
 - `installRegistryPatch(bot)` — call before login
 - `getModdedBlockName(stateId)` → name or null
 - `getConfidence(stateId)` → `'high'|'medium'|'low'|'manual'|null`
-- `setManualOverride(bot, stateId, name)` — persists to modded-state-ids.json + re-patches
+- `setManualOverride(bot, stateId, name)` — writes to nilo.db state_ids + re-patches
 
 **In-game command:** `blockmap 4218 yigd:grave` → calls `setManualOverride`
 

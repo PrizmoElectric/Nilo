@@ -4,6 +4,9 @@ node_modules/
 nohup.out
 logs/
 scans/
+*.db
+*.db-shm
+*.db-wal
 
 .aider*
 venv-aider/

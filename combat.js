@@ -6,6 +6,7 @@ const state  = require('./state');
 const { setBehavior } = require('./behavior');
 const { createMovements } = require('./movement');
 const { MASTER } = require('./config');
+const db     = require('./db');
 
 // ── Hostile mob list ──────────────────────────────────────────────────────────
 
@@ -17,10 +18,14 @@ const HOSTILE_MOBS = new Set([
   'zombie_villager','zombie_pigman','zombified_piglin','warden','breeze',
 ]);
 
+const stmtGetEntity = db.prepare('SELECT is_hostile FROM entities WHERE name = ?');
+
 function isHostileMob(entity) {
   if (!entity || entity.type === 'player' || entity.type === 'object') return false;
-  // Normalise name: strip namespace prefix, lowercase (handles modded entities)
   const name = (entity.name || '').toLowerCase().replace(/^[a-z_]+:/, '');
+  // DB knowledge (player-taught) takes priority over hardcoded list
+  const row = stmtGetEntity.get(name);
+  if (row !== undefined) return !!row.is_hostile;
   return HOSTILE_MOBS.has(name) || entity.type === 'hostile' || entity.kind === 'Hostile mobs';
 }
 
@@ -72,11 +77,6 @@ function equipBestRanged(bot) {
   return null;
 }
 
-// Keep old name for backwards compat with existing callers
-function hasBowAndArrows(bot) {
-  const r = equipBestRanged(bot);
-  return r ? { bow: r.item, arrows: true } : null;
-}
 
 function equipShield(bot) {
   const shield = bot.inventory.items().find(i => i.name === 'shield');
@@ -442,10 +442,10 @@ function startBowMode(bot) {
 }
 
 module.exports = {
-  HOSTILE_MOBS, isHostileMob,
-  equipBestMeleeWeapon, equipBestRanged, hasBowAndArrows, equipShield,
+  isHostileMob,
+  equipBestMeleeWeapon, equipBestRanged, equipShield,
   combatTick,
   solveAimPoint, shootAtEntity, shootAtPosition, shootAtGazeTarget,
   startAttack, startAssist, startBowMode,
-  MELEE_RANGE, RANGED_RANGE, RETREAT_HP, TOTEM_HP,
+  MELEE_RANGE, RETREAT_HP,
 };

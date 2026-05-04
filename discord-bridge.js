@@ -27,7 +27,8 @@
 
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const state = require('./state');
-const { DISCORD_TOKEN, DISCORD_CHANNEL_ID, DISCORD_MASTER_ID, BOT_USERNAME, MASTER } = require('./config');
+const { DISCORD_TOKEN, DISCORD_CHANNEL_ID, DISCORD_MASTER_ID, BOT_USERNAME, MASTER,
+        getServerConfig, getActiveServerName, setActiveServer, loadServers, addServer } = require('./config');
 
 let discordClient  = null;
 let bridgeChannel  = null;
@@ -124,6 +125,9 @@ async function _handleDiscordMessage(message) {
         '`!trust <player>` / `!untrust <player>` — manage trust\n' +
         '`!trusted` — list trusted players\n' +
         '`!behavior <mode>` / `!behavior clear` — set behavior\n' +
+        '`!server list` — show server profiles\n' +
+        '`!server switch <name>` — switch Minecraft server\n' +
+        '`!server save <name>` — save current server as a profile\n' +
         '`!status` / `!skills` — status & skill list\n' +
         '_Or just talk naturally — Nilo understands you._'
       );
@@ -192,6 +196,45 @@ async function _handleDiscordMessage(message) {
     if (/^!trusted$/i.test(lower)) {
       const list = require('./trust').listTrusted();
       await toDiscord(`**Trusted players:** ${list.length ? list.join(', ') : 'none'}`);
+      return;
+    }
+
+    // ── Server switching ─────────────────────────────────────────────────────
+    if (/^!server\s+list$/i.test(lower)) {
+      const servers = loadServers();
+      const names   = Object.keys(servers);
+      if (!names.length) { await toDiscord('No server profiles in servers.json.'); return; }
+      const current = getActiveServerName();
+      const lines = names.map(n => {
+        const s = servers[n];
+        return `**${n}**${n === current ? ' *(current)*' : ''}: \`${s.host}:${s.port}\` v${s.version}${s.description ? ' — ' + s.description : ''}`;
+      });
+      await toDiscord('**Server profiles:**\n' + lines.join('\n'));
+      return;
+    }
+    if (/^!server\s+switch\s+\S+/i.test(lower)) {
+      const name = lower.replace(/^!server\s+switch\s+/, '').trim();
+      try {
+        setActiveServer(name);
+        const sc = getServerConfig();
+        await toDiscord(`Switching to **${name}** (\`${sc.host}:${sc.port}\`) — reconnecting in ~10s...`);
+        if (bot) setTimeout(() => bot.quit('server switch'), 500);
+        else await toDiscord('(Nilo is offline — will connect to the new server on next start.)');
+      } catch (e) {
+        await toDiscord(`Error: ${e.message}`);
+      }
+      return;
+    }
+    if (/^!server\s+current$/i.test(lower)) {
+      const sc = getServerConfig();
+      await toDiscord(`Current server: **${getActiveServerName()}** (\`${sc.host}:${sc.port}\` v${sc.version})`);
+      return;
+    }
+    if (/^!server\s+save\s+\S+/i.test(lower)) {
+      const name = lower.replace(/^!server\s+save\s+/, '').trim();
+      const sc   = getServerConfig();
+      addServer(name, { host: sc.host, port: sc.port, version: sc.version, auth: sc.auth, description: '' });
+      await toDiscord(`Saved current server (\`${sc.host}:${sc.port}\`) as **${name}**.`);
       return;
     }
 
@@ -355,15 +398,6 @@ function attachBot(bot) {
   console.log('[DISCORD] Attached to Minecraft bot.');
 }
 
-// ── Legacy alias — kept so any existing callers don't break ──────────────────
-function initDiscord(bot) {
-  if (!discordClient) startDiscord();
-  // attachBot will be called by nilo.js on login, but support old call-style too
-  attachBot(bot);
-}
-
-// ── Manual post helper (usable from other modules) ───────────────────────────
-// e.g. toDiscord('Farm run complete.') from activities.js
 
 async function stopDiscord(reason = 'stop') {
   if (!discordClient) return;
@@ -374,4 +408,4 @@ async function stopDiscord(reason = 'stop') {
   discordClient.destroy();
 }
 
-module.exports = { startDiscord, attachBot, initDiscord, toDiscord, stopDiscord };
+module.exports = { startDiscord, attachBot, toDiscord, stopDiscord };

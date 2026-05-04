@@ -1,0 +1,133 @@
+NILO — CHANGELOG
+================
+Newest first. Dates are approximate session dates.
+
+────────────────────────────────────────────────────────
+2026-05-04
+────────────────────────────────────────────────────────
+New modules:
+- blockresolver.js — safe block resolution via bot.registry (runtime, not hardcoded IDs).
+  resolveBlock, getStateIdAt, findNearestBlock, searchRegistry. Works for vanilla and modded.
+  Also copied to agent/ as a reference document for future AI sessions.
+- easyauth.js — auto-register / auto-login for EasyAuth servers (reads NILO_PASSWORD env var)
+
+Multi-server support (config.js + servers.json):
+- servers.json — named server profiles (host, port, version, auth, log_path, description)
+- config.js: getServerConfig(), getActiveServerName(), setActiveServer(name), addServer(), loadServers()
+- nilo.js: reads from getServerConfig() instead of hardcoded constants
+- CLI flag: node nilo.js --server=<name> (or --server <name>) to pick a profile at launch
+- In-game: "list servers", "current server", "switch server <name>", "save server as <name>"
+
+"this" command stateId fix (commands/misc.js):
+- Block response now includes stateId: "oak_log at X Y Z [sid:N]"
+- Entity response includes hostile flag + health: "zombie (hostile mob [hostile] hp:18)"
+- Both looked up against DB entities table for hostile classification
+
+Block physics teaching (commands/registry.js + registry-patch.js):
+- "X is solid" / "X is passable" / "X is walkable" — teaches Nilo block physics conversationally
+- Writes to DB blocks table; registry-patch reads it back to fix pathfinding for modded blocks
+- setManualBlockPhysics exported from registry-patch.js
+- Physics resolution order: DB → BLOCK_PHYSICS map → name-based heuristic
+
+chatLong (letta.js):
+- New export chatLong(bot, text) — splits long Letta replies and sends them as multiple chat messages
+
+Fabric handshake handler (nilo.js):
+- Handles login_plugin_request packets: owo:handshake, forgeconfigapiport, and unknown channels
+- Prevents Fabric servers from kicking Nilo during the mod negotiation phase
+
+────────────────────────────────────────────────────────
+2026-05-03
+────────────────────────────────────────────────────────
+Code cleanup pass — no features added, no behaviour changed.
+
+Removed dead code:
+- hasBowAndArrows (combat.js) — unused wrapper around equipBestRanged
+- initDiscord (discord-bridge.js) — legacy alias, no callers
+
+Removed dead exports (functions remain, just no longer exported):
+- VANILLA_IRON_DOORS, DOOR_KEYWORDS (movement.js) — internal only
+- handleLogEvent (monitor.js) — only called inside watchLog
+- tryPlaceBlock (activities.js) — only called by buildSimpleHouse
+- BUILDABLE_KEYWORDS (items.js) — only used by isBuildable
+- HOSTILE_MOBS, RANGED_RANGE, TOTEM_HP (combat.js) — internal only
+  (MELEE_RANGE and RETREAT_HP kept — guard.js imports them)
+
+Removed dead constants:
+- HOST, PORT, MC_VERSION, LOG_PATH (config.js) — zero external callers
+
+Fixed code in wrong place:
+- Inline require('./letta') inside blockUpdate handler (nilo.js) — removed,
+  was already imported at the top of the file
+- Two require('./config') calls in activities.js merged into one
+
+────────────────────────────────────────────────────────
+2026-04-29
+────────────────────────────────────────────────────────
+- Fix missing Mineflayer dependency in project description
+- SESSION_RESUME + CHECKLIST updated to reflect end-of-session state
+
+────────────────────────────────────────────────────────
+2026-04-27
+────────────────────────────────────────────────────────
+- Add restart command — sends intentional disconnect, reconnects after 10s
+- Suppress scan chat spam for scan radius > 2 blocks (top-10 only)
+- Add 'id <stateId>' command — looks up a state ID and prints block + position
+- gaze.js rewritten — fixes crash on unresolved modded blocks; all three cases
+  handled: entity, resolved modded block, unresolved block ('unknown block' + stateId)
+
+────────────────────────────────────────────────────────
+2026-04-25
+────────────────────────────────────────────────────────
+- Registry auto-mapper: intercepts Fabric custom_payload registry sync,
+  maps modded block state IDs to names automatically on each connect
+- echo scan [N] command — replays last scan(s) to chat in batches
+- blockmap <stateId> <mod:block> command — manual state ID override
+- 'id <stateId>' foundation merged into registry commands
+- Glass physics fix: isSolidCommon patch for chipped:clear_leaded_glass
+- Modular commands/ refactor completed; all handlers in separate files
+- SQLite knowledge base (nilo.db) introduced; state_ids, blocks, entities,
+  locations, learned tables; one-time migration from modded-state-ids.json
+- db.js: single persistent DB module replacing ad-hoc JSON file reads
+- Combat autonomy: combatTick shared by startAttack, startAssist, guard skill
+- perfect_shot_bow.js and equip_totem.js skills wired into combatTick
+- logger introduced in scan + fix discord routing
+- Bed detection fix; echo scan grouping fix
+
+────────────────────────────────────────────────────────
+2026-04-14
+────────────────────────────────────────────────────────
+- Discord bridge added (discord-bridge.js); mirrors MASTER commands
+- Crafting commands added (craft, smelt, what can I craft, ensure tools)
+- canDig set false by default in createMovements (prevents unwanted digging)
+- Letta cleanup: context now includes inventory, language, action hints
+- 'X is Y' block alias teaching wired to DB state_ids table
+- 'X is hostile / not hostile' wired to DB entities table
+- 'what do you know about X' registry query command
+- Session hint ([NEW SESSION]) sent to Letta when idle > 5 min
+- Plugin install groundwork (mineflayer-pathfinder, hawkeye, etc.)
+
+────────────────────────────────────────────────────────
+2026-04-early  (initial build)
+────────────────────────────────────────────────────────
+- Bot skeleton: nilo.js entry point, auto-reconnect, chat dispatch
+- config.js: constants + loadConfig/saveConfig (JSON file I/O)
+- state.js: shared mutable runtime state object
+- trust.js: isTrusted / trustPlayer / untrustPlayer / listTrusted
+- lang.js: detectLanguage → 'en' | 'pt-BR'
+- letta.js: queryLetta + parseAction; Letta memory agent integration
+- behavior.js + movement.js: modes (idle/follow/wander/sit/attack/…),
+  door opener, fence-set cleanup, stuck recovery
+- items.js: inventory helpers
+- gaze.js: raycast from MASTER's eye position
+- combat.js: isHostileMob, weapon helpers, bow mode, aim solver
+- activities.js: farm, collectGrave, fishing, buildSimpleHouse, dance, sleep
+- monitor.js: proximity greet, follow complaint, health/threat warnings,
+  server log watcher (joins, deaths, advancements)
+- commands/ initial set: navigation, combat, activities, physical,
+  inventory, skills, trust, registry, misc
+- actions.js: dispatchAction (LLM action → function call)
+- skill-engine.js: Voyager-style Ollama-generated JS skills
+- 12 handcrafted skills added to skills/
+- MASTER + LETTA_URL moved to environment variables
+- Door physics + stuck-state fixes

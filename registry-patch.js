@@ -1,72 +1,125 @@
 // registry-patch.js — Fabric modded block registry auto-mapper
+// Persistent storage backed by nilo.db (via db.js).
+// Manual overrides take priority over auto-resolved mappings.
 //
-// Strategy:
-//   1. Capture modded block names + block IDs from Fabric registry sync packet
-//   2. As chunks load, scan their palettes for unknown state IDs (above vanilla max)
-//   3. Gap analysis: consecutive runs of state IDs separated by gaps → infer block boundaries
-//   4. Patch bot.registry so bot.blockAt() returns correct names automatically
-//   5. modded-state-ids.json holds manual overrides with highest priority
-//   6. Uncertain assignments are logged to modded-blocks-uncertain.log for review
+// Pipeline (runs on every connect):
+//   1. Load all state_ids from DB into in-memory caches
+//   2. Capture modded block names from Fabric registry sync packet
+//   3. After spawn: record vanilla max state ID, patch registry from DB entries
+//   4. As chunks load: scan palettes for unknown state IDs > vanillaMax
+//   5. Gap analysis: consecutive runs → block boundaries → assign + save to DB
+//   6. patchRegistryFromResolved: build descriptors using DB blocks table for physics
 
 const fs   = require('fs');
 const path = require('path');
+const db   = require('./db');
 
-const OVERRIDE_FILE = path.join(__dirname, 'modded-state-ids.json');
-const MAPPING_FILE  = path.join(__dirname, 'modded-blocks-mapping.json');
 const UNCERTAIN_LOG = path.join(__dirname, 'modded-blocks-uncertain.log');
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// ── In-memory caches ──────────────────────────────────────────────────────────
 
 let moddedBlocks    = [];       // [{name, blockId}] sorted by blockId asc (registration order)
-let discovered      = new Set(); // state IDs observed in chunk palettes
+let discovered      = new Set(); // state IDs seen in chunk palettes
 let resolved        = {};        // stateId → {name, confidence}
-let manualOverrides = {};        // stateId → name (loaded from modded-state-ids.json)
+let manualOverrides = {};        // stateId → name
 let vanillaMax      = 0;
 
-// ── Block physics overrides ───────────────────────────────────────────────────
-// Applied after every patch. Prevents isSolidCommon heuristic from
-// misclassifying known blocks. Add entries here as new problems are found.
+// ── Block physics ─────────────────────────────────────────────────────────────
+// Resolution order: blocks DB table → BLOCK_PHYSICS fallback → heuristic.
+// DB entries always win so the player can teach Nilo correct physics conversationally.
+
 const BLOCK_PHYSICS = {
-  // Passable plants — bot walks THROUGH them, not on top
   grass:                 { boundingBox: 'empty', transparent: true,  shapes: [] },
   tall_grass:            { boundingBox: 'empty', transparent: true,  shapes: [] },
   fern:                  { boundingBox: 'empty', transparent: true,  shapes: [] },
   large_fern:            { boundingBox: 'empty', transparent: true,  shapes: [] },
   dead_bush:             { boundingBox: 'empty', transparent: true,  shapes: [] },
   vine:                  { boundingBox: 'empty', transparent: true,  shapes: [] },
-  // Solid full blocks — heuristic misses these (no 'brick'/'stone'/'plank' in name)
   podzol:                { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
   mycelium:              { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
   coarse_dirt:           { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
   rooted_dirt:           { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
   mud:                   { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
-  // Server floor tiles — retextured by mod to be solid walkable floor
   pumpkin_stem:          { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
   attached_pumpkin_stem: { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
   melon_stem:            { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
   attached_melon_stem:   { boundingBox: 'block', transparent: false, shapes: [[0,0,0,1,1,1]] },
 };
 
-// ── File helpers ──────────────────────────────────────────────────────────────
+const stmtGetBlock      = db.prepare('SELECT * FROM blocks WHERE name = ?');
+const stmtGetAllBlocks  = db.prepare('SELECT name, bounding_box, transparent, shapes_json FROM blocks');
+const stmtUpsertBlock   = db.prepare(`
+  INSERT INTO blocks (name, bounding_box, is_solid, transparent, passable, shapes_json, source, confidence, taught_by, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, 'player', 'manual', ?, strftime('%s', 'now'))
+  ON CONFLICT(name) DO UPDATE SET
+    bounding_box = excluded.bounding_box,
+    is_solid     = excluded.is_solid,
+    transparent  = excluded.transparent,
+    passable     = excluded.passable,
+    shapes_json  = excluded.shapes_json,
+    source       = excluded.source,
+    confidence   = excluded.confidence,
+    taught_by    = excluded.taught_by,
+    updated_at   = excluded.updated_at
+`);
 
-function loadOverrides() {
-  if (!fs.existsSync(OVERRIDE_FILE)) return;
-  try {
-    const raw = JSON.parse(fs.readFileSync(OVERRIDE_FILE, 'utf8'));
-    for (const [k, v] of Object.entries(raw)) manualOverrides[parseInt(k)] = v;
-    console.log(`[REGISTRY] Loaded ${Object.keys(manualOverrides).length} manual overrides`);
-  } catch (e) {
-    console.warn('[REGISTRY] Could not load modded-state-ids.json:', e.message);
+function getPhysicsForName(name) {
+  const row = stmtGetBlock.get(name);
+  if (row) {
+    return {
+      boundingBox: row.bounding_box,
+      transparent: !!row.transparent,
+      shapes: row.shapes_json ? JSON.parse(row.shapes_json) : [],
+    };
   }
+  if (BLOCK_PHYSICS[name]) return BLOCK_PHYSICS[name];
+  // Heuristic: common solid block name patterns
+  const isSolid = name.includes('brick') || name.includes('stone') || name.includes('plank')
+    || (name.includes('glass') && !name.includes('pane'));
+  return {
+    boundingBox: isSolid ? 'block' : 'empty',
+    transparent: !isSolid || name.includes('glass'),
+    shapes:      isSolid ? [[0, 0, 0, 1, 1, 1]] : [],
+  };
 }
 
-function saveManualOverrides() {
-  try { fs.writeFileSync(OVERRIDE_FILE, JSON.stringify(manualOverrides, null, 2), 'utf8'); } catch (_) {}
+// ── DB persistence ────────────────────────────────────────────────────────────
+
+const stmtUpsertStateId = db.prepare(`
+  INSERT INTO state_ids (state_id, block_name, source, confidence, updated_at)
+  VALUES (?, ?, ?, ?, strftime('%s', 'now'))
+  ON CONFLICT(state_id) DO UPDATE SET
+    block_name = excluded.block_name,
+    source     = excluded.source,
+    confidence = excluded.confidence,
+    updated_at = excluded.updated_at
+`);
+
+const stmtUpsertMany = db.transaction((entries) => {
+  for (const [stateId, info] of entries) {
+    stmtUpsertStateId.run(stateId, info.name, info.source || 'auto', info.confidence);
+  }
+});
+
+function loadFromDB() {
+  const rows = db.prepare('SELECT * FROM state_ids').all();
+  for (const row of rows) {
+    if (row.source === 'manual') {
+      manualOverrides[row.state_id] = row.block_name;
+    } else {
+      resolved[row.state_id] = { name: row.block_name, confidence: row.confidence };
+    }
+  }
+  console.log(`[REGISTRY] Loaded ${Object.keys(manualOverrides).length} manual + ${Object.keys(resolved).length} auto from DB`);
 }
 
 function saveMapping() {
-  try { fs.writeFileSync(MAPPING_FILE, JSON.stringify(resolved, null, 2), 'utf8'); } catch (_) {}
+  const entries = Object.entries(resolved)
+    .map(([id, info]) => [parseInt(id), { name: info.name, source: 'auto', confidence: info.confidence }]);
+  if (entries.length) stmtUpsertMany(entries);
 }
+
+// ── Uncertain log ─────────────────────────────────────────────────────────────
 
 function logUncertain(entries) {
   if (!entries.length) return;
@@ -113,8 +166,8 @@ function parseFabricRegistrySync(buf) {
       offset = retry.offset;
     }
     for (let r = 0; r < count; r++) {
-      const regName  = readString(buf, offset); offset = regName.offset;
-      const entryCount = readVarInt(buf, offset); offset = entryCount.offset;
+      const regName    = readString(buf, offset); offset = regName.offset;
+      const entryCount = readVarInt(buf, offset);  offset = entryCount.offset;
       const entries = {};
       for (let e = 0; e < entryCount.value; e++) {
         const name = readString(buf, offset); offset = name.offset;
@@ -132,16 +185,8 @@ function parseFabricRegistrySync(buf) {
 // ── Gap-analysis assignment ───────────────────────────────────────────────────
 //
 // Fabric assigns block IDs and state IDs in the same registration order.
-// Unknown state IDs above vanillaMax therefore arrive in the same order as
-// moddedBlocks (sorted by blockId). Gaps between consecutive state IDs seen
-// in chunk palettes suggest a block type that hasn't appeared in loaded world
-// yet — those gaps become segment boundaries.
-//
-// Confidence:
-//   high   — segment count == modded block count (1:1 match)
-//   medium — fewer segments than blocks (some blocks not yet seen)
-//   low    — more segments than blocks (blocks have non-contiguous observed states,
-//            or registration order assumption is off)
+// Unknown state IDs above vanillaMax arrive in the same order as moddedBlocks.
+// Consecutive-ID runs suggest a single block type; gaps are block boundaries.
 
 function resolveMapping(bot) {
   if (!moddedBlocks.length || !vanillaMax) return;
@@ -152,7 +197,6 @@ function resolveMapping(bot) {
 
   if (!unknownIds.length) return;
 
-  // Split into consecutive runs — gaps are potential block boundaries
   const segments = [];
   let cur = [unknownIds[0]];
   for (let i = 1; i < unknownIds.length; i++) {
@@ -171,42 +215,30 @@ function resolveMapping(bot) {
   const fresh     = {};
 
   if (nSegments === nBlocks) {
-    // Perfect 1:1 — high confidence
     for (let i = 0; i < nBlocks; i++) {
       for (const id of segments[i]) {
         fresh[id] = { name: moddedBlocks[i].name, confidence: 'high' };
       }
     }
-
   } else if (nSegments < nBlocks) {
-    // Some blocks haven't appeared in loaded chunks yet
-    // Assign segment[i] to moddedBlocks[i] directly — medium confidence
     for (let i = 0; i < nSegments; i++) {
       const block = moddedBlocks[i];
       for (const id of segments[i]) {
         fresh[id] = { name: block.name, confidence: 'medium' };
-        uncertain.push({
-          stateId: id, name: block.name, confidence: 'medium',
-          reason: `${nSegments} segments observed, ${nBlocks} modded blocks — explore more to improve accuracy`,
-        });
+        uncertain.push({ stateId: id, name: block.name, confidence: 'medium',
+          reason: `${nSegments} segments observed, ${nBlocks} modded blocks — explore more to improve accuracy` });
       }
     }
-
   } else {
-    // More segments than blocks: some block has non-contiguous states observed,
-    // or registration order assumption is wrong — proportional split, low confidence
     for (let i = 0; i < unknownIds.length; i++) {
       const bi    = Math.min(Math.floor((i / unknownIds.length) * nBlocks), nBlocks - 1);
       const block = moddedBlocks[bi];
       fresh[unknownIds[i]] = { name: block.name, confidence: 'low' };
-      uncertain.push({
-        stateId: unknownIds[i], name: block.name, confidence: 'low',
-        reason: `${nSegments} segments > ${nBlocks} blocks — check modded-state-ids.json`,
-      });
+      uncertain.push({ stateId: unknownIds[i], name: block.name, confidence: 'low',
+        reason: `${nSegments} segments > ${nBlocks} blocks — use blockmap command to correct` });
     }
   }
 
-  // Merge: manual overrides and existing high-confidence entries are protected
   let patched = 0;
   for (const [idStr, info] of Object.entries(fresh)) {
     const id = parseInt(idStr);
@@ -226,45 +258,41 @@ function resolveMapping(bot) {
 // ── Registry patcher ──────────────────────────────────────────────────────────
 
 function patchRegistryFromResolved(bot) {
-  const byName = {};
+  const byName   = {};
+  const manualIds = new Set(Object.keys(manualOverrides).map(Number));
 
   const add = (stateId, name) => {
     if (!byName[name]) byName[name] = [];
     byName[name].push(stateId);
   };
 
-  const manualIds = new Set(Object.keys(manualOverrides).map(Number));
-
-  // Merge resolved and manual mappings
-  for (const [id, info] of Object.entries(resolved)) add(parseInt(id), info.name);
+  for (const [id, info] of Object.entries(resolved))       add(parseInt(id), info.name);
   for (const [id, name] of Object.entries(manualOverrides)) add(parseInt(id), name);
 
   for (const [name, stateIds] of Object.entries(byName)) {
-    const sorted = stateIds.sort((a, b) => a - b);
-    const isSolidCommon = name.includes('brick') || name.includes('stone') || name.includes('plank');
+    const sorted  = stateIds.sort((a, b) => a - b);
+    const physics = getPhysicsForName(name);
 
     const descriptor = {
-      id: sorted[0],
+      id:           sorted[0],
       name,
-      displayName: name,
-      hardness: isSolidCommon ? 1.5 : 1,
-      resistance: isSolidCommon ? 6 : 1,
-      stackSize: 64,
-      diggable: true,
-      transparent: !isSolidCommon,
-      emitLight: 0,
-      filterLight: 15,
+      displayName:  name,
+      hardness:     physics.boundingBox === 'block' ? 1.5 : 1,
+      resistance:   physics.boundingBox === 'block' ? 6 : 1,
+      stackSize:    64,
+      diggable:     true,
+      transparent:  physics.transparent,
+      emitLight:    0,
+      filterLight:  15,
       defaultState: sorted[0],
-        minStateId: sorted[0],
-        maxStateId: sorted[sorted.length - 1],
-        states: [],
-        // THE FIX: Pathfinder needs 'shapes' to avoid the TypeError
-        shapes: isSolidCommon ? [[0, 0, 0, 1, 1, 1]] : [],
-        boundingBox: isSolidCommon ? 'block' : 'empty',
+      minStateId:   sorted[0],
+      maxStateId:   sorted[sorted.length - 1],
+      states:       [],
+      shapes:       physics.shapes,
+      boundingBox:  physics.boundingBox,
     };
 
     for (const id of sorted) {
-      // Force overwrite if it's one of our modded/manual IDs
       if (manualIds.has(id) || resolved[id]) {
         bot.registry.blocksByStateId[id] = descriptor;
       } else if (!bot.registry.blocksByStateId[id]) {
@@ -272,24 +300,27 @@ function patchRegistryFromResolved(bot) {
       }
     }
 
-    if (!bot.registry.blocksByName[name]) {
-      bot.registry.blocksByName[name] = descriptor;
-    }
+    if (!bot.registry.blocksByName[name]) bot.registry.blocksByName[name] = descriptor;
   }
 
-  // Apply physics overrides — runs after every patch so new descriptors
-  // can't undo corrections. Mutates in place so blocksByName and blocksByStateId
-  // stay consistent when they share the same descriptor object.
+  // Apply BLOCK_PHYSICS corrections to vanilla descriptors (not already handled via DB).
+  // These are vanilla block names — their registry entries exist but have wrong physics.
   for (const [name, fix] of Object.entries(BLOCK_PHYSICS)) {
-    // Fix the blocksByName entry (vanilla descriptors and any we just wrote)
     const bbn = bot.registry.blocksByName[name];
     if (bbn) Object.assign(bbn, fix);
-    // Fix state ID entries we wrote this patch (may be different objects)
-    if (byName[name]) {
-      for (const id of byName[name]) {
-        const bbs = bot.registry.blocksByStateId[id];
-        if (bbs) Object.assign(bbs, fix);
-      }
+  }
+
+  // Apply player-taught block physics (blocks DB table) to vanilla descriptors.
+  // DB entries override BLOCK_PHYSICS so manual teaching always wins.
+  for (const row of stmtGetAllBlocks.all()) {
+    const bbn = bot.registry.blocksByName[row.name];
+    if (!bbn) continue;
+    const shapes = row.shapes_json ? JSON.parse(row.shapes_json)
+      : (row.bounding_box === 'block' ? [[0, 0, 0, 1, 1, 1]] : []);
+    const fix = { boundingBox: row.bounding_box, transparent: !!row.transparent, shapes };
+    Object.assign(bbn, fix);
+    for (let id = bbn.minStateId; id <= bbn.maxStateId; id++) {
+      if (bot.registry.blocksByStateId[id]) Object.assign(bot.registry.blocksByStateId[id], fix);
     }
   }
 }
@@ -301,13 +332,11 @@ function scanColumn(column) {
   if (!column?.sections) return found;
   for (const section of column.sections) {
     if (!section) continue;
-    // IndirectPaletteContainer: section.palette is an array of global state IDs
     if (Array.isArray(section.palette)) {
       for (const id of section.palette) {
         if (id > vanillaMax && !discovered.has(id)) { discovered.add(id); found++; }
       }
     }
-    // SingleValueContainer: section.data.value is the single state ID
     const sv = section.data?.value;
     if (typeof sv === 'number' && sv > vanillaMax && !discovered.has(sv)) {
       discovered.add(sv); found++;
@@ -318,29 +347,24 @@ function scanColumn(column) {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-// Best-known name for a state ID (priority: manual override > resolved > null)
 function getModdedBlockName(stateId) {
   if (manualOverrides[stateId]) return manualOverrides[stateId];
   if (resolved[stateId])        return resolved[stateId].name;
   return null;
 }
 
-// Confidence for a state ID ('high'/'medium'/'low'/'manual'/null)
 function getConfidence(stateId) {
   if (manualOverrides[stateId]) return 'manual';
   return resolved[stateId]?.confidence ?? null;
 }
 
-// Persist a manual override and immediately patch the registry
 function setManualOverride(bot, stateId, name) {
   manualOverrides[stateId] = name;
-  saveManualOverrides();
+  stmtUpsertStateId.run(stateId, name, 'manual', 'manual');
   patchRegistryFromResolved(bot);
   console.log(`[REGISTRY] Manual override: stateId ${stateId} → ${name}`);
 }
 
-// Reverse lookup: find all state IDs currently labeled with a given block name.
-// Checks manual overrides, auto-resolved, and the vanilla registry.
 function getStateIdsByName(bot, name) {
   const ids = new Set();
   for (const [id, n] of Object.entries(manualOverrides)) {
@@ -349,12 +373,21 @@ function getStateIdsByName(bot, name) {
   for (const [id, info] of Object.entries(resolved)) {
     if (info.name === name) ids.add(parseInt(id));
   }
-  // Also cover vanilla registry entries (bot may not have them in resolved/overrides)
   const vanilla = bot.registry.blocksByName[name];
   if (vanilla) {
     for (let id = vanilla.minStateId; id <= vanilla.maxStateId; id++) ids.add(id);
   }
   return [...ids];
+}
+
+function setManualBlockPhysics(bot, name, boundingBox, taughtBy) {
+  const isSolid  = boundingBox === 'block' ? 1 : 0;
+  const transp   = boundingBox === 'block' ? 0 : 1;
+  const passable = boundingBox === 'block' ? 0 : 1;
+  const shapes   = JSON.stringify(isSolid ? [[0, 0, 0, 1, 1, 1]] : []);
+  stmtUpsertBlock.run(name, boundingBox, isSolid, transp, passable, shapes, taughtBy || null);
+  patchRegistryFromResolved(bot);
+  console.log(`[REGISTRY] Block physics taught: ${name} → boundingBox=${boundingBox}`);
 }
 
 // ── Install ───────────────────────────────────────────────────────────────────
@@ -367,9 +400,8 @@ const SYNC_CHANNELS = [
 ];
 
 function installRegistryPatch(bot) {
-  loadOverrides();
+  loadFromDB();
 
-  // Phase 1: capture modded block list from Fabric registry sync
   bot._client.on('custom_payload', (packet) => {
     if (!SYNC_CHANNELS.some(ch => packet.channel === ch)) return;
     const data = packet.data;
@@ -391,14 +423,14 @@ function installRegistryPatch(bot) {
     console.log(`[REGISTRY] Captured ${moddedBlocks.length} modded block names`);
   });
 
-  // Phase 2: after spawn, record vanilla ceiling and start scanning
   bot.once('spawn', () => {
     vanillaMax = Math.max(...Object.keys(bot.registry.blocksByStateId).map(Number));
     console.log(`[REGISTRY] Vanilla ceiling: stateId ${vanillaMax} | tracking ${moddedBlocks.length} modded blocks`);
 
-    if (Object.keys(manualOverrides).length) patchRegistryFromResolved(bot);
+    if (Object.keys(manualOverrides).length || Object.keys(resolved).length) {
+      patchRegistryFromResolved(bot);
+    }
 
-    // Scan already-loaded chunks
     let total = 0;
     for (const { column } of bot.world.getColumns()) total += scanColumn(column);
     if (total > 0) {
@@ -406,17 +438,13 @@ function installRegistryPatch(bot) {
       resolveMapping(bot);
     }
 
-    // Debounced resolve on new chunk loads
     let resolveTimer = null;
     bot.world.on('chunkColumnLoad', (pos) => {
       const column = bot.world.getColumn(pos.x >> 4, pos.z >> 4);
       if (!column) return;
       const found = scanColumn(column);
       if (found > 0 && !resolveTimer) {
-        resolveTimer = setTimeout(() => {
-          resolveTimer = null;
-          resolveMapping(bot);
-        }, 3000);
+        resolveTimer = setTimeout(() => { resolveTimer = null; resolveMapping(bot); }, 3000);
       }
     });
   });
@@ -424,4 +452,4 @@ function installRegistryPatch(bot) {
   console.log('[REGISTRY] Registry patch installed — waiting for Fabric sync + spawn');
 }
 
-module.exports = { installRegistryPatch, getModdedBlockName, getConfidence, setManualOverride, getStateIdsByName };
+module.exports = { installRegistryPatch, getModdedBlockName, getConfidence, setManualOverride, getStateIdsByName, setManualBlockPhysics };

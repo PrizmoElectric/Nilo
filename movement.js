@@ -245,7 +245,6 @@ async function tryUnstuck(bot) {
 }
 
 module.exports = {
-  VANILLA_IRON_DOORS, DOOR_KEYWORDS,
   buildOpenableIds, createMovements, installDoorOpener,
   startFollow, tryUnstuck, applyServerBlockOverrides,
 };

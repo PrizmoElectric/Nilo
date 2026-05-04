@@ -25,6 +25,12 @@ const IS_LOOK_DIR = cmd([
   /\blook (?:up|down|north|south|east|west)\b/,
   /\bolha (?:para cima|para baixo|para o norte|para o sul|para o leste|para o oeste)\b/,
 ]);
+const IS_LOOK_AT_ME_TIMED = cmd([
+  /\blook at me for \d+/,
+  /\bolha (?:para mim|pra mim) por \d+/,
+]);
+
+let lookAtMeTimer = null;
 
 async function handle(bot, lower, raw) {
   if (IS_JUMP(lower)) {
@@ -110,6 +116,26 @@ async function handle(bot, lower, raw) {
     bot.setControlState('sneak', false);
     if (state.behaviorMode === 'sit') setBehavior(bot, 'idle', MASTER);
     bot.chat('*stands up*');
+    return true;
+  }
+
+  if (IS_LOOK_AT_ME_TIMED(lower)) {
+    const secM = lower.match(/for\s+(\d+)/);
+    const secs  = secM ? Math.min(parseInt(secM[1]), 60) : 5;
+
+    if (lookAtMeTimer) { clearInterval(lookAtMeTimer); lookAtMeTimer = null; }
+
+    bot.chat(`*looks at you for ${secs}s*`);
+    lookAtMeTimer = setInterval(() => {
+      const master = bot.players[MASTER]?.entity;
+      if (!master?.position) return;
+      bot.lookAt(master.position.offset(0, master.height * 0.9, 0), true).catch(() => {});
+    }, 50);
+
+    setTimeout(() => {
+      clearInterval(lookAtMeTimer);
+      lookAtMeTimer = null;
+    }, secs * 1000);
     return true;
   }
 

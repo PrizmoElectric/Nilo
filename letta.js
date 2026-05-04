@@ -39,4 +39,31 @@ function parseAction(raw) {
   };
 }
 
-module.exports = { queryLetta, parseAction };
+// ── Multi-line chat sender ────────────────────────────────────────────────────
+// Minecraft caps chat at 256 chars. Splits at word boundaries and sends each
+// chunk with a short delay so the server doesn't drop messages.
+
+const CHAT_MAX = 250;
+const CHAT_DELAY_MS = 350;
+
+async function chatLong(bot, text) {
+  if (!text) return;
+  if (text.length <= CHAT_MAX) { bot.chat(text); return; }
+
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > CHAT_MAX) {
+    let cut = remaining.lastIndexOf(' ', CHAT_MAX);
+    if (cut <= 0) cut = CHAT_MAX;
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining) chunks.push(remaining);
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, CHAT_DELAY_MS));
+    bot.chat(chunks[i]);
+  }
+}
+
+module.exports = { queryLetta, parseAction, chatLong };

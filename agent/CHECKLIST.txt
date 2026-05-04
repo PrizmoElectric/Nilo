@@ -1,235 +1,77 @@
-NILO PROJECT CHECKLIST
-======================
-Last updated: 2026-04-25
-Format: [x] complete | [~] incomplete/in-progress | [ ] todo
+NILO PROJECT — PENDING ITEMS
+============================
+Last updated: 2026-05-04
+Architecture reference: agent/map.txt
 
 ────────────────────────────────────────────────────────
-REFACTOR: Monolithic nilo.js → modular structure
+IN PROGRESS — next session
 ────────────────────────────────────────────────────────
-[x] state.js         — shared runtime state object
-[x] config.js        — constants + loadConfig/saveConfig (includes MATURE_CROPS, regex consts)
-[x] trust.js         — isTrusted, trustPlayer, untrustPlayer, listTrusted
-[x] lang.js          — detectLanguage
-[x] letta.js         — queryLetta, parseAction
-[x] behavior.js      — setBehavior, clearBehavior
-[x] movement.js      — createMovements, buildOpenableIds, installDoorOpener, startFollow, tryUnstuck
-[x] items.js         — inventory helpers (getEquipDestination, isEquippable, pickupNearestItem, isBuildable)
-[x] combat.js        — isHostileMob, weapon helpers, startAttack, startBowMode
-[x] activities.js    — runFarm, collectGrave, startFishing, buildSimpleHouse, startDance, sleepInBed
-[x] monitor.js       — startProximityMonitor, startAutonomousBehaviors, startSkillAutonomyTicker, watchLog, sessionHintFor
-[x] commands.js      — handleNaturalCommand + all IS_* pattern matchers (EN + pt-BR):
-                        follow/come/closer/unstuck/stop/stay/sit/wander/attack/defensive/passive
-                        explore/stop_explore, fish/stop_fish, bow, tunnel/stop_tunnel,
-                        shoot_target, build, sleep, dance; physical: jump/move_dir/sprint/
-                        spin/wave/crouch/stand/look_dir; inventory: eat/equip/unequip/give/
-                        drop; click block at coords; look at me; NL trust management;
-                        say/repeat passthrough; farm, learn/run/forget/list skill,
-                        queue goal, autonomous on/off (no exact !nilo prefix needed)
-[x] actions.js       — dispatchAction, runCommand
-[x] nilo.js          — trimmed to entry point (~430 lines, was 1640)
-[x] map.txt           — up-to-date module map written
+[ ] Nilo v2 — Python rewrite (learning-focused)
+    User is learning to code. Guide, don't replace.
 
 ────────────────────────────────────────────────────────
-SKILLS SYSTEM
+DONE — 2026-05-04
 ────────────────────────────────────────────────────────
-[x] skill-engine.js  — learnSkill, runSkill, autonomousTick, curriculum, skillCount, listSkills, deleteSkill, queueGoal
-[x] skills/manifest.json
-[x] Pre-built skills: jump, jump_5_times, wave, spin, sprint_forward, move_forward,
-                      move_back, move_left, move_right, look_around, crouch_stand
+[x] blockresolver.js — safe runtime block resolution via bot.registry
+[x] easyauth.js — auto-login / register for EasyAuth servers
+[x] Multi-server switching: servers.json, config.js getServerConfig/setActiveServer,
+    CLI --server=<name>, in-game "switch server <name>"
+[x] "this" command now shows [sid:N] for blocks
+[x] Block physics teaching: "X is solid/passable" wired to DB blocks table
+[x] chatLong — long Letta replies split into multiple chat messages
+[x] Fabric handshake handler (owo:handshake, forgeconfigapiport)
+
+DONE — 2026-05-03
+────────────────────────────────────────────────────────
+[x] Code cleanup pass — all redundancies removed (see CHANGELOG.txt)
 
 ────────────────────────────────────────────────────────
-INFRASTRUCTURE / FIXES
+NEEDS LIVE TEST
 ────────────────────────────────────────────────────────
-[x] Door physics fix  — installDoorOpener (physicsTick proactive opener, Fabric workaround)
-[x] Fence set cleanup — modded stone/brick false-impassable fix in createMovements
-[x] Stuck recovery    — tryUnstuck + 3-streak abandon logic in nilo.js path_reset handler
-[x] canDig off by default — createMovements sets canDig=false unless opts.canDig===true;
-                            prevents pathfinder from mining walls/floors during normal nav
-[x] Login plugin handshake — fabric-networking-api-v1 + forgeconfigapiport handled
-[x] Auth auto-login   — /register and /login from bot.on('message')
-[x] Auto-reconnect    — 10s reconnect on bot end
+[ ] Full boot: node nilo.js — confirm no import errors
+
+[~] GLASS PHYSICS — isSolidCommon fix 2026-04-25 + block physics teaching now wired.
+    Teach: "chipped:clear_leaded_glass is passable", then walk on it to confirm.
+
+[ ] "this" command — test all three cases:
+    - look at entity       → name, kind, [hostile/passive], hp
+    - look at block        → name + position + [sid:N]
+    - nothing in range     → "I don't see anything there."
+
+[ ] Block physics teaching — say "X is solid" / "X is passable", confirm DB write
+    and that pathfinder respects the change on next reconnect.
+
+[ ] isHostileMob — confirm DB entities table path fires for modded mob names
+
+[ ] chatLong — say something that makes Letta reply long; confirm no single message
+    exceeds 256 chars and all parts arrive.
+
+[ ] Server switching — "switch server private", confirm Nilo reconnects to correct host.
+
+[ ] EasyAuth — join an EasyAuth server; confirm /register or /login fires automatically.
 
 ────────────────────────────────────────────────────────
-TUNNELING SYSTEM
+FEATURES TO BUILD
 ────────────────────────────────────────────────────────
-[x] tunnel.js        — startTunnel(bot, length): digs 1-wide 2-tall tunnel in MASTER's
-                        cardinal yaw direction; handles lava/water sealing, torch placement
-                        every 8 blocks, falling-block (sand/gravel) pre-clear, health abort
-                        (≤4 hp), step-forward via pathfinder with control-state fallback
-[x] IS_TUNNEL / IS_STOP_TUNNEL — command patterns in commands.js (EN + pt-BR); length
-                                   parsed from message, capped at 512
-[x] [ACTION: tunnel] — LLM-dispatchable action in actions.js
-[x] "tunnel" in actionHint in nilo.js
+[ ] Internet / wiki search — Nilo should be able to look up information from:
+    - Mod wikis (e.g. CurseForge, Modrinth mod pages, FTB wiki, etc.)
+    - Prominence 2 modpack wiki / documentation
+    Approach: give Letta a web-search tool (or a dedicated wiki-scraping skill)
+    so Nilo can answer "how do I craft X?" or "what does this mob drop?" by
+    fetching live wiki content rather than relying only on trained knowledge.
 
 ────────────────────────────────────────────────────────
-EXPLORATION SYSTEM
+KNOWN GAPS
 ────────────────────────────────────────────────────────
-[x] state.exploringEnabled flag — toggled by explore/stop_explore action and NL command
-[x] IS_EXPLORE / IS_STOP_EXPLORE — command patterns in commands.js (EN + pt-BR)
-[x] [ACTION: explore] / [ACTION: stop_explore] — LLM-dispatchable in actions.js
-[x] "explore/stop_explore" in actionHint in nilo.js
+[ ] monitor.js watchLog — LOG_PATH now comes from getServerConfig().log_path; confirm
+    it reloads correctly when switching servers mid-session.
+
+[ ] blockresolver.js not yet imported anywhere in nilo.js — it's a utility module
+    that callers will need to require explicitly.
 
 ────────────────────────────────────────────────────────
-GAZE / TARGETING SYSTEM
+HOUSEKEEPING
 ────────────────────────────────────────────────────────
-[x] gaze.js — getPlayerGazeTarget(bot, maxDistance): on-demand raycast from MASTER's eye
-              returns { block, entity, position }, entity wins if closer than block
-
-────────────────────────────────────────────────────────
-RANGED COMBAT
-────────────────────────────────────────────────────────
-[x] solveAimPoint()     — iterative ballistic solver: gravity drop + drag + target leading
-[x] shootAtEntity()     — equip bow/crossbow, re-aim every 50ms while charging, release
-[x] shootAtPosition()   — single shot at a static world position with gravity compensation
-[x] shootAtGazeTarget() — fires at whatever MASTER is looking at (entity or position)
-[x] startBowMode()      — updated to use shootAtEntity (replaces manual aim math)
-[x] "shoot that/it/there" — command in commands.js (IS_SHOOT_TARGET), passive-mode aware
-[x] [ACTION: shoot_target] — LLM-dispatchable action in actions.js
-[x] actionHint in nilo.js updated to include shoot_target
-
-────────────────────────────────────────────────────────
-CRAFTING SYSTEM
-────────────────────────────────────────────────────────
-[x] crafting.js      — craftItem, smeltItem, ensureTools, listCraftable, resolveItemName
-                        craftItem: resolves NL name → registry, finds/places crafting table,
-                        calls bot.recipesFor + bot.craft
-                        smeltItem: finds furnace, auto-fuels, puts input, waits for output
-                        ensureTools: crafts missing pickaxe/sword from available materials
-                        listCraftable: scans all recipes given current inventory
-[x] IS_CRAFT / IS_SMELT / IS_WHAT_CAN_CRAFT / IS_ENSURE_TOOLS — NL patterns in commands.js
-[x] [ACTION: ensure_tools] — LLM-dispatchable in actions.js + actionHint in nilo.js
-
-────────────────────────────────────────────────────────
-SIGN WRITING
-────────────────────────────────────────────────────────
-[x] writeSign(bot, text)   — place sign from inventory, wrapSignText to 4×15 chars,
-                              bot.updateSign() front face
-[x] wrapSignText(text)     — word-wrap helper: splits text into 4 lines ≤15 chars
-[x] IS_WRITE_SIGN          — NL pattern in commands.js; extracts text after "sign:" / "saying"
-[x] Auto-fill blank signs  — blockUpdate listener in nilo.js: when MASTER places a blank sign
-                              within 8 blocks, Letta generates in-character text, Nilo writes it
-
-────────────────────────────────────────────────────────
-PLUGIN UPGRADES
-────────────────────────────────────────────────────────
-[x] mineflayer-tool        — installed + loaded; auto-equips best tool when breaking blocks
-[x] mineflayer-armor-manager — installed + loaded; auto-equips best armor on inventory change
-[x] mineflayer-auto-eat    — installed + loaded; eats at hunger ≤15, bans rotten/toxic food
-
-────────────────────────────────────────────────────────
-MODDED BLOCK REGISTRY PATCH
-────────────────────────────────────────────────────────
-[x] registry-patch.js — intercept Fabric registry_sync custom_payload packet,
-                         parse blockName→stateId map, patch bot.registry so
-                         bot.blockAt() returns correct names for all modded blocks
-[x] Wire installRegistryPatch(bot) call in nilo.js before bot login event
-[x] Verify grave detection works after patch (yigd:grave resolves by name) — CONFIRMED 2026-04-25, manual override in modded-state-ids.json
-[ ] Verify scan command shows real mod block names instead of unknown(type:N)
-[ ] Verify isHostileMob entity detection works for modded mob names
-
-────────────────────────────────────────────────────────
-GIT / HOUSEKEEPING
-────────────────────────────────────────────────────────
-[x] Commit all new modules — committed and pushed (origin/main up to date as of 2026-04-25)
-[ ] Clean up junk files: the two "--set-instructions=..." empty files in project root
-[ ] Update .gitignore if needed (currently modified but unreviewed)
-
-────────────────────────────────────────────────────────
-KNOWN GAPS / POTENTIAL TODOS (review before marking done)
-────────────────────────────────────────────────────────
-[ ] Test full boot: node nilo.js — confirm no import errors across all new modules
-[ ] Verify Letta LETTA_URL in config.js is still the correct agent ID
-[ ] letta.js: parseAction — confirm [ACTION: name] parsing still matches the prompt hint in nilo.js
-[x] activities.js collectGrave — fully ported: GoalBlock adjacent nav, stale-ref re-fetch,
-                                 openContainer withdraw, sneak+right-click fallback
-[ ] monitor.js watchLog — uses LOG_PATH from config, confirm path is still valid
-
-────────────────────────────────────────────────────────
-SCAN / BLOCK IDENTIFICATION COMMANDS
-────────────────────────────────────────────────────────
-[x] scan [radius]     — scans area, radius > 2 suppresses chat (use echo to review)
-[x] echo scan [N]     — posts scan N top-20, one line per message at 250ms
-[x] echo scan N-M     — one summary line per scan in range
-[x] blockmap <sid> <mod:block> — manual state ID → block name override
-[x] id <stateId>      — locates exact coordinates of all blocks with that state ID (32-block radius)
-[x] X is [actually] Y — conversational remapping: patches all state IDs for X to Y name
-
-────────────────────────────────────────────────────────
-MISC COMMANDS
-────────────────────────────────────────────────────────
-[x] restart / reiniciar / reboot — disconnect + reconnect in 10s
-
-────────────────────────────────────────────────────────
-COMBAT AUTONOMY SYSTEM
-────────────────────────────────────────────────────────
-[x] combatTick() — shared autonomous combat AI function in combat.js:
-      distance-based action selection (melee / ranged / kite / close-in / retreat)
-      auto-equips totem when health <= 6 (via skill engine)
-      uses perfect_shot_bow skill when ranged weapon available + target in range
-      falls back to shootAtEntity if skill not found
-      per-action cooldowns prevent action spam
-[x] startAttack — rewritten to delegate to combatTick (melee + ranged + totem)
-[x] startAssist — rewritten to delegate to combatTick + player follow
-[x] guard skill — rewritten to delegate to combatTick + return-to-post
-[x] "defend me"/"guard me"/"cover me" — added to IS_HELP trigger patterns
-[x] mineflayer-pvp — installed + loaded in nilo.js
-[x] minecrafthawkeye — installed + loaded in nilo.js
-[x] perfect_shot_bow skill — hawkeye-based precise shot, used by combatTick
-[x] equip_totem skill — used autonomously by combatTick when health low
-
-────────────────────────────────────────────────────────
-KNOWLEDGE BASE — SQLite (NEXT MAJOR FEATURE)
-────────────────────────────────────────────────────────
-Objective: replace all JSON knowledge files with a single SQLite database
-so Nilo can learn, query, and reason about his world autonomously.
-
-WHY SQLite OVER JSON:
-  - Multiple JSON files (modded-state-ids.json, modded-blocks-mapping.json,
-    learned-physics.json) are siloed and can't reference each other.
-  - As Nilo learns more (blocks, entities, locations, player corrections),
-    querying and joining across topics requires a real database.
-  - better-sqlite3 is synchronous and zero-config — perfect for a game bot.
-  - One file on disk instead of many scattered JSON files.
-
-SCHEMA (planned):
-  blocks     — name, bounding_box, is_solid, is_passable, hardness,
-               source (vanilla/auto/player/observed), confidence, taught_by
-  state_ids  — state_id → block_name, source, confidence
-               (replaces modded-state-ids.json + modded-blocks-mapping.json)
-  entities   — name, is_hostile, source, confidence, taught_by
-  locations  — x, y, z, label, notes
-  learned    — full history of what the player has taught Nilo and when
-
-PHYSICS RESOLUTION (replaces hardcoded BLOCK_PHYSICS table):
-  When creating a descriptor for a state ID, check blocks table first.
-  If found → use stored physics. If not → look up vanilla registry by name.
-  If still not found → heuristic fallback + mark as low confidence.
-  Truly modded blocks with unknown physics can be taught conversationally:
-    "yigd:grave is solid" → saved to blocks table, applied immediately.
-
-CONVERSATIONAL LEARNING (extends current block alias command):
-  "pumpkin_stem is stone_bricks"  → remap state IDs + inherit vanilla physics
-  "yigd:grave is solid"           → save to blocks table as player-taught
-  "that creeper mod is hostile"   → save to entities table
-  All saved to DB with source='player', taught_by=username, timestamp.
-
-IMPLEMENTATION STEPS:
-[ ] npm install better-sqlite3
-[ ] Create db.js — opens/creates nilo.db, runs migrations, exports db instance
-[ ] Write schema migrations (blocks, state_ids, entities, locations, learned)
-[ ] Migrate registry-patch.js to read/write state_ids + blocks tables
-    - On boot: load overrides from state_ids (replaces modded-state-ids.json)
-    - On resolve: write to state_ids (replaces modded-blocks-mapping.json)
-    - Descriptor creation: query blocks table for physics before using heuristic
-[ ] Migrate commands/registry.js block alias to write to learned + blocks tables
-[ ] Add entity knowledge: IS_ENTITY_LEARN command ("X is hostile")
-[ ] Add "what do you know about X" query command
-
-────────────────────────────────────────────────────────
-DISCORD PARITY
-────────────────────────────────────────────────────────
-[x] Expose terminal-only commands via Discord:
-      - !autonomous on/off, !skill learn/run/forget/list, !goal, !trust/!untrust/!trusted
-      - !behavior <mode> / !behavior clear
-      - !help shows full master command list
-      All MASTER-only. Non-master users keep read-only access (!status, !skills, !help).
+[ ] Delete junk files: "--set-instructions=..." empty files in project root
+[ ] Review .gitignore (modified, unreviewed)
+[ ] Commit all uncommitted changes (22 files modified)
