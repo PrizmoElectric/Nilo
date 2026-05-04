@@ -3,7 +3,25 @@ NILO — CHANGELOG
 Newest first. Dates are approximate session dates.
 
 ────────────────────────────────────────────────────────
-2026-05-04
+2026-05-04 (session 3)
+────────────────────────────────────────────────────────
+Fabric handshake fix + kick diagnostics (nilo.js):
+- fabric-networking-api-v1:early_registration now responds with empty channel
+  list (Buffer [0x00]) instead of echoing the server's list back. Echoing
+  claimed support for all server Fabric channels, causing stricter servers
+  (e.g. private ATLauncher) to kick Nilo during login.
+- Added bot.on('kicked') — logs the actual kick reason from the server.
+- Improved bot.on('error') — now also logs err.code and JSON for cases where
+  err.message is empty (was silently swallowing ECONNREFUSED details).
+
+Boot test passed:
+- node nilo.js starts clean: no import errors, DB loads, registry patch
+  installs, Discord logs in. Auto-reconnect loop works. Kills cleanly.
+- Known pre-existing warning: Mineflayer physicTick → physicsTick deprecation.
+  Harmless, low priority.
+
+────────────────────────────────────────────────────────
+2026-05-04 (session 2)
 ────────────────────────────────────────────────────────
 New modules:
 - blockresolver.js — safe block resolution via bot.registry (runtime, not hardcoded IDs).

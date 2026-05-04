@@ -15,7 +15,7 @@ Full architecture: agent/map.txt
 
 ── WHAT WAS DONE THIS SESSION (2026-05-04) ───────────────────────────────────
 
-  Feature session on Nilo v1 (Node.js). Details in CHANGELOG.txt.
+  Feature + debug session on Nilo v1 (Node.js). Details in CHANGELOG.txt.
 
   Added:
   - blockresolver.js — runtime block name→stateId resolution using bot.registry
@@ -28,10 +28,15 @@ Full architecture: agent/map.txt
   - Block physics teaching: "X is solid/passable" → writes to DB, fixes pathfinding
   - chatLong in letta.js: splits long Letta replies into multiple chat messages
   - Fabric handshake handler: handles owo:handshake, forgeconfigapiport, unknown plugin channels
+  - Fabric handshake FIX: early_registration now sends empty channel list, not an echo
+  - Kick reason logging: bot.on('kicked') + better bot.on('error') output
 
-── DEFERRED (v1 — low priority) ──────────────────────────────────────────────
+  Boot test: passed. node nilo.js starts clean, reconnects, kills cleanly.
 
-1. Boot test: node nilo.js — confirm no import errors
-2. Glass physics — chipped:clear_leaded_glass walkability (physics teaching now wired; needs live test)
-3. blocks table teaching — now wired via IS_BLOCK_PHYSICS; needs live test
+── DEFERRED (v1 — needs live test) ───────────────────────────────────────────
+
+1. Private server connection — handshake fix applied; test when private server is running
+2. Glass physics — chipped:clear_leaded_glass walkability
+3. "X is solid/passable" teaching — wired, needs live test
 4. isHostileMob — confirm DB entities table path fires for modded mob names
+5. physicTick deprecation — rename in code (low priority, harmless)

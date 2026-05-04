@@ -20,6 +20,9 @@ DONE — 2026-05-04
 [x] Block physics teaching: "X is solid/passable" wired to DB blocks table
 [x] chatLong — long Letta replies split into multiple chat messages
 [x] Fabric handshake handler (owo:handshake, forgeconfigapiport)
+[x] Fabric handshake fix — early_registration responds with empty list, not echo
+[x] Kick reason logging — bot.on('kicked') + improved bot.on('error')
+[x] Boot test passed — no import errors, clean start/stop
 
 DONE — 2026-05-03
 ────────────────────────────────────────────────────────
@@ -28,7 +31,7 @@ DONE — 2026-05-03
 ────────────────────────────────────────────────────────
 NEEDS LIVE TEST
 ────────────────────────────────────────────────────────
-[ ] Full boot: node nilo.js — confirm no import errors
+[x] Full boot: node nilo.js — confirmed, no import errors (2026-05-04)
 
 [~] GLASS PHYSICS — isSolidCommon fix 2026-04-25 + block physics teaching now wired.
     Teach: "chipped:clear_leaded_glass is passable", then walk on it to confirm.
@@ -46,7 +49,8 @@ NEEDS LIVE TEST
 [ ] chatLong — say something that makes Letta reply long; confirm no single message
     exceeds 256 chars and all parts arrive.
 
-[ ] Server switching — "switch server private", confirm Nilo reconnects to correct host.
+[ ] Server switching — "switch server private", confirm Nilo reconnects and
+    the handshake fix lets it stay connected (private server must be running).
 
 [ ] EasyAuth — join an EasyAuth server; confirm /register or /login fires automatically.
 
@@ -59,6 +63,12 @@ FEATURES TO BUILD
     Approach: give Letta a web-search tool (or a dedicated wiki-scraping skill)
     so Nilo can answer "how do I craft X?" or "what does this mob drop?" by
     fetching live wiki content rather than relying only on trained knowledge.
+
+────────────────────────────────────────────────────────
+KNOWN GAPS / LOW PRIORITY
+────────────────────────────────────────────────────────
+[ ] physicTick deprecation warning — Mineflayer renamed physicTick → physicsTick.
+    Harmless but noisy. Find usages and rename.
 
 ────────────────────────────────────────────────────────
 KNOWN GAPS
