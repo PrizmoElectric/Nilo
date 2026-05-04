@@ -73,9 +73,11 @@ function createBot() {
 
     let responseData = null;
 
-    if (packet.channel === 'fabric-networking-api-v1:early_registration' && packet.data) {
-      // Echo the registry list back so Fabric accepts our block/item registrations.
-      responseData = packet.data;
+    if (packet.channel === 'fabric-networking-api-v1:early_registration') {
+      // Respond with an empty channel list (VarInt 0). Echoing the server's list
+      // back claims we support all its Fabric channels, which triggers extra
+      // verification that Nilo can't pass on stricter servers.
+      responseData = Buffer.from([0x00]);
     } else if (packet.channel === 'owo:handshake') {
       // oωo response: empty channel map (0x00) + version/compat byte (0x01)
       responseData = Buffer.from([0x00, 0x01]);
@@ -481,9 +483,13 @@ function createBot() {
 
   // ── Error / disconnect ────────────────────────────────────────────────────
 
+  bot.on('kicked', (reason) => {
+    console.error('[NILO] Kicked:', reason);
+  });
+
   bot.on('error', (err) => {
     if (err.name === 'PartialReadError') return;
-    console.error('[NILO] Bot error:', err.message);
+    console.error('[NILO] Bot error:', err.message || err.code || JSON.stringify(err));
   });
 
   bot.on('end', () => {
