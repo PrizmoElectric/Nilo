@@ -366,25 +366,10 @@ Bot mirrors MASTER-only commands via Discord. Non-master users get read-only acc
 
 ## How to Add Things
 
-### New natural language command
-1. Pick the right handler file in `commands/` (or create a new one and add it to `commands/index.js`).
-2. Add an `IS_*` matcher constant using `cmd([...regexes...])`.
-3. Add a handler block in the file's `handle(bot, lower, raw)` function.
-
-### New LLM-dispatchable action
-1. Add a `case 'name':` block in `dispatchAction` in `actions.js`.
-2. Add `'name'` to the `actionHint` string in `nilo.js`.
-
-### New pre-built skill
-1. Create `skills/<name>.js` exporting `async function niloSkill(bot)`.
-2. Add an entry to `skills/manifest.json`.
-
-### New behavior mode
-1. Use any new string as the mode — no enum to update.
-2. Call `setBehavior(bot, 'newmode', username)` to enter.
-3. Check `state.behaviorMode === 'newmode'` inside your interval/loop.
-4. `clearBehavior` kills the interval automatically if stored in `state.behaviorInterval`.
-
-### New modded block manual override
-1. In-game: `blockmap <stateId> <mod:block_name>` (calls `setManualOverride`)
-2. Or edit `modded-state-ids.json` directly and restart.
+| What | Where |
+|---|---|
+| New natural language command | `commands/<category>.js` — add `IS_*` matcher + handler block |
+| New LLM-dispatchable action | `actions.js` dispatchAction + `actionHint` string in `nilo.js` |
+| New pre-built skill | `skills/<name>.js` (export `async function niloSkill(bot)`) + `manifest.json` |
+| New behavior mode | any string — call `setBehavior(bot, mode, username)`, store tick in `state.behaviorInterval` |
+| Manual block ID override | in-game `blockmap <stateId> <mod:block>` or `blockmap` command |

@@ -4,84 +4,46 @@ Last updated: 2026-05-04
 Architecture reference: agent/map.txt
 
 ────────────────────────────────────────────────────────
-IN PROGRESS — next session
+IN PROGRESS
 ────────────────────────────────────────────────────────
 [ ] Nilo v2 — Python rewrite (learning-focused)
     User is learning to code. Guide, don't replace.
 
 ────────────────────────────────────────────────────────
-DONE — 2026-05-04
-────────────────────────────────────────────────────────
-[x] blockresolver.js — safe runtime block resolution via bot.registry
-[x] easyauth.js — auto-login / register for EasyAuth servers
-[x] Multi-server switching: servers.json, config.js getServerConfig/setActiveServer,
-    CLI --server=<name>, in-game "switch server <name>"
-[x] "this" command now shows [sid:N] for blocks
-[x] Block physics teaching: "X is solid/passable" wired to DB blocks table
-[x] chatLong — long Letta replies split into multiple chat messages
-[x] Fabric handshake handler (owo:handshake, forgeconfigapiport)
-[x] Fabric handshake fix — early_registration responds with empty list, not echo
-[x] Kick reason logging — bot.on('kicked') + improved bot.on('error')
-[x] Boot test passed — no import errors, clean start/stop
-
-DONE — 2026-05-03
-────────────────────────────────────────────────────────
-[x] Code cleanup pass — all redundancies removed (see CHANGELOG.txt)
-
-────────────────────────────────────────────────────────
 NEEDS LIVE TEST
 ────────────────────────────────────────────────────────
-[x] Full boot: node nilo.js — confirmed, no import errors (2026-05-04)
+[~] Glass physics — teach "chipped:clear_leaded_glass is passable", walk on it.
 
-[~] GLASS PHYSICS — isSolidCommon fix 2026-04-25 + block physics teaching now wired.
-    Teach: "chipped:clear_leaded_glass is passable", then walk on it to confirm.
+[ ] "this" command — test entity (name/kind/hostile/hp), block (name+pos+[sid:N]), nothing.
 
-[ ] "this" command — test all three cases:
-    - look at entity       → name, kind, [hostile/passive], hp
-    - look at block        → name + position + [sid:N]
-    - nothing in range     → "I don't see anything there."
+[ ] Block physics teaching — "X is solid/passable" → confirm DB write + pathfinder change.
 
-[ ] Block physics teaching — say "X is solid" / "X is passable", confirm DB write
-    and that pathfinder respects the change on next reconnect.
+[ ] isHostileMob — confirm DB entities table fires for modded mob names.
 
-[ ] isHostileMob — confirm DB entities table path fires for modded mob names
+[ ] chatLong — trigger a long Letta reply, confirm no message exceeds 256 chars.
 
-[ ] chatLong — say something that makes Letta reply long; confirm no single message
-    exceeds 256 chars and all parts arrive.
+[ ] Server switching — "switch server private" with private server running;
+    confirm handshake fix lets Nilo stay connected.
 
-[ ] Server switching — "switch server private", confirm Nilo reconnects and
-    the handshake fix lets it stay connected (private server must be running).
-
-[ ] EasyAuth — join an EasyAuth server; confirm /register or /login fires automatically.
+[ ] EasyAuth — join EasyAuth server, confirm /register or /login fires automatically.
 
 ────────────────────────────────────────────────────────
 FEATURES TO BUILD
 ────────────────────────────────────────────────────────
-[ ] Internet / wiki search — Nilo should be able to look up information from:
-    - Mod wikis (e.g. CurseForge, Modrinth mod pages, FTB wiki, etc.)
-    - Prominence 2 modpack wiki / documentation
-    Approach: give Letta a web-search tool (or a dedicated wiki-scraping skill)
-    so Nilo can answer "how do I craft X?" or "what does this mob drop?" by
-    fetching live wiki content rather than relying only on trained knowledge.
-
-────────────────────────────────────────────────────────
-KNOWN GAPS / LOW PRIORITY
-────────────────────────────────────────────────────────
-[ ] physicTick deprecation warning — Mineflayer renamed physicTick → physicsTick.
-    Harmless but noisy. Find usages and rename.
+[ ] Internet / wiki search — give Letta a web-search tool so Nilo can answer
+    "how do I craft X?" from live mod wiki content (CurseForge, FTB wiki, etc.)
 
 ────────────────────────────────────────────────────────
 KNOWN GAPS
 ────────────────────────────────────────────────────────
-[ ] monitor.js watchLog — LOG_PATH now comes from getServerConfig().log_path; confirm
+[ ] physicTick → physicsTick deprecation warning in Mineflayer (harmless, low priority).
+
+[ ] monitor.js watchLog — LOG_PATH now from getServerConfig().log_path; test that
     it reloads correctly when switching servers mid-session.
 
-[ ] blockresolver.js not yet imported anywhere in nilo.js — it's a utility module
-    that callers will need to require explicitly.
+[ ] blockresolver.js not imported anywhere yet — standalone utility, require explicitly.
 
 ────────────────────────────────────────────────────────
 HOUSEKEEPING
 ────────────────────────────────────────────────────────
 [ ] Delete junk files: "--set-instructions=..." empty files in project root
-[ ] Review .gitignore (modified, unreviewed)
-[ ] Commit all uncommitted changes (22 files modified)

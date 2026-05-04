@@ -2,41 +2,21 @@ SESSION RESUME — 2026-05-04 (end of session)
 ============================================
 Pending items: agent/CHECKLIST.txt
 Full architecture: agent/map.txt
+Detailed history: agent/CHANGELOG.txt
 
 ── OBJECTIVE FOR NEXT SESSION ────────────────────────────────────────────────
 
-  NILO V2 — Python rewrite, learning-focused session.
-  The user is learning to code. They will write the code.
-  Your role: guide, explain, review. Do NOT write everything for them.
+  NILO V2 — Python rewrite, learning-focused.
+  User is learning to code. Guide, don't replace.
+  Ask what they understand first. Point toward answers, don't give them.
 
-  - Ask what they understand before explaining.
-  - When they get stuck, point them toward the answer rather than giving it.
-  - If they try to delegate the whole task to you, redirect them.
+── LAST SESSION (2026-05-04) ─────────────────────────────────────────────────
 
-── WHAT WAS DONE THIS SESSION (2026-05-04) ───────────────────────────────────
+  Feature + debug session on Nilo v1. See CHANGELOG.txt for full list.
+  Key: blockresolver, easyauth, multi-server switching, block physics teaching,
+  chatLong, Fabric handshake fix (early_registration → empty list), kick logging.
+  Boot test: passed.
 
-  Feature + debug session on Nilo v1 (Node.js). Details in CHANGELOG.txt.
+── DEFERRED ──────────────────────────────────────────────────────────────────
 
-  Added:
-  - blockresolver.js — runtime block name→stateId resolution using bot.registry
-  - easyauth.js — auto-login / auto-register for EasyAuth servers
-  - servers.json — named server profiles; multi-server switching fully wired
-  - config.js extended: getServerConfig, setActiveServer, addServer, loadServers
-  - CLI: node nilo.js --server=<name>
-  - In-game server commands: list servers, current server, switch server <name>, save server as <name>
-  - "this" command stateId fix: block response now shows [sid:N]
-  - Block physics teaching: "X is solid/passable" → writes to DB, fixes pathfinding
-  - chatLong in letta.js: splits long Letta replies into multiple chat messages
-  - Fabric handshake handler: handles owo:handshake, forgeconfigapiport, unknown plugin channels
-  - Fabric handshake FIX: early_registration now sends empty channel list, not an echo
-  - Kick reason logging: bot.on('kicked') + better bot.on('error') output
-
-  Boot test: passed. node nilo.js starts clean, reconnects, kills cleanly.
-
-── DEFERRED (v1 — needs live test) ───────────────────────────────────────────
-
-1. Private server connection — handshake fix applied; test when private server is running
-2. Glass physics — chipped:clear_leaded_glass walkability
-3. "X is solid/passable" teaching — wired, needs live test
-4. isHostileMob — confirm DB entities table path fires for modded mob names
-5. physicTick deprecation — rename in code (low priority, harmless)
+  See CHECKLIST.txt → NEEDS LIVE TEST.
