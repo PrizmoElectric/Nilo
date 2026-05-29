@@ -14,7 +14,7 @@ const CHROME = '/home/prizmo/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-
 const SOURCE_URL = 'http://localhost:3007/';
 const WIDTH  = 854;
 const HEIGHT = 480;
-const FPS_MS = 1000;
+const FPS_MS = 333; // ~3 fps
 
 const HTML = `<!DOCTYPE html>
 <html>
@@ -77,13 +77,19 @@ async function startBrowser() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-gpu',           // software rendering only
+      // WebGL via SwiftShader (software renderer — works headless, no physical GPU needed)
+      '--use-gl=swiftshader',
+      '--enable-webgl',
+      '--ignore-gpu-blocklist',
+      '--enable-gpu-rasterization',
       '--window-size=' + WIDTH + ',' + HEIGHT,
     ],
   });
   page = await browser.newPage();
   await page.setViewport({ width: WIDTH, height: HEIGHT });
-  await page.goto(SOURCE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto(SOURCE_URL, { waitUntil: 'networkidle0', timeout: 30000 });
+  // Wait for chunks to stream in and WebGL scene to render
+  await new Promise(r => setTimeout(r, 8000));
   console.log('[STREAM] Headless Chrome opened', SOURCE_URL);
 }
 
