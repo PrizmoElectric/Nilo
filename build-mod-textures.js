@@ -82,12 +82,14 @@ function extractJars(neededMods) {
     const hasNeeded = [...neededMods].some(m => listing.includes(`assets/${m}/blockstates/`));
     if (!hasNeeded) continue;
     try {
+      // unzip exits non-zero if some glob patterns match nothing — ignore that
       execSync(
         `unzip -q -n "${jp}" ` +
-        `"assets/*/blockstates/*.json" "assets/*/models/block/*.json" ` +
-        `"assets/*/models/item/*.json" "assets/*/textures/block/*.png" ` +
-        `-d "${EXTRACT}" 2>/dev/null`,
-        { maxBuffer: 100e6 }
+        `"assets/*/blockstates/*.json" ` +
+        `"assets/*/models/block/*.json" "assets/*/models/block/*/*.json" "assets/*/models/block/*/*/*.json" ` +
+        `"assets/*/textures/block/*.png" "assets/*/textures/block/*/*.png" "assets/*/textures/block/*/*/*.png" "assets/*/textures/block/*/*/*/*.png" ` +
+        `-d "${EXTRACT}" 2>/dev/null; exit 0`,
+        { shell: '/bin/bash', maxBuffer: 100e6 }
       );
       done++;
     } catch {}
@@ -107,17 +109,23 @@ function loadAllModels(neededMods) {
     models[name] = model; // bare name fallback
   }
 
-  // Modded models from extracted JARs
-  for (const modid of neededMods) {
-    const dir = path.join(EXTRACT, 'assets', modid, 'models', 'block');
-    if (!fs.existsSync(dir)) continue;
-    for (const file of fs.readdirSync(dir)) {
-      if (!file.endsWith('.json')) continue;
-      try {
-        const key = `${modid}:block/${file.slice(0, -5)}`;
-        models[key] = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
-      } catch {}
+  // Modded models from extracted JARs — walk subdirectories for mods like TechReborn
+  function walkModels(dir, modid, prefix) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        walkModels(path.join(dir, entry.name), modid, prefix + entry.name + '/');
+      } else if (entry.name.endsWith('.json')) {
+        try {
+          const rel = prefix + entry.name.slice(0, -5); // e.g. "ore/tin_ore"
+          const key = `${modid}:block/${rel}`;
+          models[key] = JSON.parse(fs.readFileSync(path.join(dir, entry.name), 'utf8'));
+        } catch {}
+      }
     }
+  }
+  for (const modid of neededMods) {
+    walkModels(path.join(EXTRACT, 'assets', modid, 'models', 'block'), modid, '');
   }
   console.log(`Loaded ${Object.keys(models).length} models`);
   return models;
@@ -142,15 +150,21 @@ function loadTexturePaths(neededMods) {
     }
   }
 
-  // Modded textures from extracted JARs
-  for (const modid of neededMods) {
-    const dir = path.join(EXTRACT, 'assets', modid, 'textures', 'block');
-    if (!fs.existsSync(dir)) continue;
-    for (const file of fs.readdirSync(dir)) {
-      if (!file.endsWith('.png')) continue;
-      const key = `${modid}:block/${file.slice(0, -4)}`;
-      paths[key] = path.join(dir, file);
+  // Modded textures from extracted JARs — walk subdirectories
+  function walkTextures(dir, modid, prefix) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        walkTextures(path.join(dir, entry.name), modid, prefix + entry.name + '/');
+      } else if (entry.name.endsWith('.png')) {
+        const rel = prefix + entry.name.slice(0, -4); // e.g. "ore/tin_ore"
+        const key = `${modid}:block/${rel}`;
+        paths[key] = path.join(dir, entry.name);
+      }
     }
+  }
+  for (const modid of neededMods) {
+    walkTextures(path.join(EXTRACT, 'assets', modid, 'textures', 'block'), modid, '');
   }
   console.log(`Found ${Object.keys(paths).length} texture paths`);
   return paths;
@@ -324,6 +338,9 @@ function bakeEntry(blockstateDef, allModels, texSlots, blockName) {
       bakedElements.push({ from: elem.from, to: elem.to, faces: bakedFaces, ...(elem.rotation && { rotation: elem.rotation }) });
     }
     if (bakedElements.length === 0) return null;
+    // Skip highly complex models (>2 elements) — keeps file size manageable.
+    // Complex decoration blocks (Chipped etc.) fall back to colored cube.
+    if (bakedElements.length > 2) return null;
 
     // Build model.textures (particle + face references) for the baked entry
     const modelTextures = {};
@@ -441,8 +458,16 @@ async function main() {
   const { canvas, ctx, texSlots, nextSlot } = await buildAtlas(allTexPaths, atlasPath);
 
   // Step 5: bake blockStates for modded blocks
-  const bsPath = path.join(OUT_DIR, 'prominence-blockstates.json');
-  const blockStates = JSON.parse(fs.readFileSync(bsPath, 'utf8'));
+  // Always start from the vanilla backup (11 MB) — never from our previous output
+  // which can grow to hundreds of MB.  UVs in the vanilla file are in 512-atlas
+  // space; scale by 1/8 to match our 4096×4096 atlas.
+  const vanillaBS = path.join(PUBLIC, 'blocksStates/1.20.1.json.vanilla');
+  const blockStates = JSON.parse(fs.readFileSync(vanillaBS, 'utf8'));
+  (function scaleUVs(obj) {
+    if (!obj || typeof obj !== 'object') return;
+    if (typeof obj.u === 'number') { obj.u *= 0.125; obj.v *= 0.125; obj.su *= 0.125; obj.sv *= 0.125; return; }
+    for (const v of Object.values(obj)) scaleUVs(v);
+  })(blockStates);
 
   const uniqueModded = [...new Set(
     Object.values(allBlocks).filter(n => !n.startsWith('minecraft:'))
@@ -481,8 +506,18 @@ async function main() {
   // Step 6: save outputs
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
+  // Stream-write JSON to avoid V8 string length limit on large datasets
   const outJson = path.join(OUT_DIR, 'prominence-blockstates.json');
-  fs.writeFileSync(outJson, JSON.stringify(blockStates));
+  const ws = fs.createWriteStream(outJson);
+  ws.write('{');
+  let firstEntry = true;
+  for (const [key, val] of Object.entries(blockStates)) {
+    if (!firstEntry) ws.write(',');
+    ws.write(JSON.stringify(key) + ':' + JSON.stringify(val));
+    firstEntry = false;
+  }
+  ws.write('}');
+  await new Promise((res, rej) => { ws.end(); ws.on('finish', res); ws.on('error', rej); });
   console.log(`Wrote ${outJson} (${Object.keys(blockStates).length} entries)`);
 
   const outPng = path.join(OUT_DIR, 'prominence-atlas.png');
