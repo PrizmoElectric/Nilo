@@ -12,7 +12,8 @@ const IS_MOVE_DIR = cmd([
 ]);
 const IS_SPRINT_CMD = cmd([/\bsprint\b/, /\brun forward\b/, /\brun fast\b/, /\bcorre(?:r)?\b/]);
 const IS_SPIN = cmd([
-  /\bspin(?: around| \d+ times?)?\b/, /\bturn around\b/, /\bdo a spin\b/, /\bdo a 360\b/,
+  /\bspin[lr]?\b/, /\bspin (?:left|right)\b/,
+  /\bturn around\b/, /\bdo a spin\b/, /\bdo a 360\b/,
   /\bgira\b/, /\bd[aá] uma volta\b/, /\bda um giro\b/,
 ]);
 const IS_WAVE   = cmd([/\bwave\b/, /\bwave at\b/, /\bswing your arm\b/, /\bacena\b/, /\bbalança o braço\b/]);
@@ -81,16 +82,19 @@ async function handle(bot, lower, raw) {
   }
 
   if (IS_SPIN(lower)) {
-    const m = lower.match(/(\d+)/);
-    const n = m ? Math.min(parseInt(m[1]), 5) : 1;
-    bot.chat(n === 1 ? '*spins*' : `*spins ${n} times*`);
+    const goRight = /spinr\b|spin right\b/.test(lower);
+    const dir = goRight ? -1 : 1; // left = +yaw in mineflayer
+    const degM = lower.match(/(\d+)/);
+    const degrees = degM ? Math.min(parseInt(degM[1]), 1080) : 360;
+    const radians = degrees * Math.PI / 180;
+    const steps = 20;
+    const stepAngle = dir * radians / steps;
+    const dirLabel = goRight ? 'right' : 'left';
+    bot.chat(degrees === 360 ? `*spins ${dirLabel}*` : `*spins ${dirLabel} ${degrees}°*`);
     (async () => {
-      for (let i = 0; i < n; i++) {
-        const steps = 20;
-        for (let s = 0; s < steps; s++) {
-          await bot.look(bot.entity.yaw + (Math.PI * 2 / steps), bot.entity.pitch, false);
-          await new Promise(r => setTimeout(r, 60));
-        }
+      for (let s = 0; s < steps; s++) {
+        await bot.look(bot.entity.yaw + stepAngle, bot.entity.pitch, false);
+        await new Promise(r => setTimeout(r, 60));
       }
     })();
     return true;
