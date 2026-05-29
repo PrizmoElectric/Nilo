@@ -1,8 +1,23 @@
-SESSION RESUME — 2026-05-29 (session 9, in progress)
+SESSION RESUME — 2026-05-29 (session 10)
 =============================================
 Pending items: agent/CHECKLIST.txt
 Full architecture: agent/map.txt
 Detailed history: agent/CHANGELOG.txt
+
+── STANDARD NILO COMMANDS ────────────────────────────────────────────────────
+
+  Nilo runs as a systemd user service. Never start it with `node nilo.js`.
+
+  nilo start     → start the bot
+  nilo stop      → stop the bot
+  nilo restart   → restart the bot
+  nilo status    → service status
+  nilo logs      → follow live logs (Ctrl+C to exit)
+  nilo           → open interactive chat session
+
+  Service file: ~/.config/systemd/user/nilo.service
+  Survives terminal disconnects, SSH drops, Termux crashes.
+  Auto-restarts on failure (10s delay). Starts on boot (linger enabled).
 
 ── OBJECTIVE FOR NEXT SESSION ────────────────────────────────────────────────
 
