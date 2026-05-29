@@ -129,12 +129,27 @@ FEATURES TO BUILD
 
 [x] Prismarine viewer — PHASE 2 COMPLETE (session 9).
     5,019 modded blocks now render with real textures from mod JARs.
-    12,418 still use colored cube fallback (mods whose JARs weren't found or
-    whose blockstate/model chains couldn't be fully resolved).
-    Script: build-mod-textures.js (offline-capable via all-blocks-cache.json).
-    Outputs: prominence-atlas.png (3118 KB), prominence-blockstates.json.
-    NEXT (optional phase 3): investigate why 15 mods had no extractable JAR
-    assets and fix unresolved model chains to push real-texture count higher.
+
+[x] Prismarine viewer — PHASE 3 COMPLETE (session 10).
+    Root cause: subdirectory textures (block/ore/, block/machines/, etc.) were
+    skipped by the flat unzip glob. Fixed with recursive extraction + walkers.
+    13,420 real textures (2.7× improvement), 4,017 colored fallbacks remain.
+    Also fixed: invisible doors/stairs/fences (variant-aware fallback cubes).
+    Script: build-mod-textures.js. Re-run with server online to update.
+    Remaining: Chipped (complex models >2 elements), FarmersDelight, Vinery.
+
+[x] Mobile viewer — COMPLETE (session 10).
+    Port 3006: Puppeteer screenshots port 3009 (first-person, viewDistance:4)
+    and streams JPEG frames at 3fps via WebSocket. Phone shows live image.
+    Chrome: ~/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
+    Flags: headless:'new', --use-angle=swiftshader, --enable-webgl
+    Port 3007: desktop orbit view unchanged.
+    Port 3009: internal first-person source (not exposed publicly).
+
+[x] Nilo skin in viewer — COMPLETE (session 10).
+    SerialDesignation_N-V2.png replaces Steve. Backup: nilo-assets/nilo-skin.png.
+    Redeploy after npm install:
+      cp nilo-assets/nilo-skin.png node_modules/prismarine-viewer/public/textures/1.16.4/entity/steve.png
 
 ────────────────────────────────────────────────────────
 KNOWN GAPS
