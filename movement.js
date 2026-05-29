@@ -143,12 +143,13 @@ function installDoorOpener(bot) {
       const props = block.getProperties ? block.getProperties() : {};
       if (props.open === true || props.open === 'true') continue;
 
-      const key = `${block.position.x},${block.position.y},${block.position.z}`;
+      // Use x,z + base-y as key so both halves of a 2-block door share one cooldown.
+      const bpos = block.position;
+      const key = `${bpos.x},${Math.floor(bpos.y / 2)},${bpos.z}`;
       const now = Date.now();
-      if (now - (lastAttempt.get(key) || 0) < 800) continue; // 0.8s cooldown per block
+      if (now - (lastAttempt.get(key) || 0) < 3000) continue; // 3s cooldown
 
       lastAttempt.set(key, now);
-      console.log(`[NILO] Opening door: ${block.name} at ${block.position}`);
       bot.activateBlock(block).catch(err => console.log('[NILO] Door open failed:', err.message));
       break; // open one door per tick max
     }
@@ -161,13 +162,18 @@ function installDoorOpener(bot) {
 // entity handle and adjusts distance.
 
 function startFollow(bot, targetUsername, distance = 2) {
-  setBehavior(bot, 'follow', targetUsername);
+  if (!setBehavior(bot, 'follow', targetUsername)) return;
   bot.pathfinder.setMovements(createMovements(bot));
 
   function setFollowGoal() {
     if (state.behaviorMode !== 'follow') { clearInterval(followInterval); return; }
     const target = bot.players[targetUsername]?.entity;
     if (!target) { bot.clearControlStates(); return; }
+    const dist = bot.entity.position.distanceTo(target.position);
+    if (dist > 100) {
+      bot.chat(`/tp ${bot.username} ${targetUsername}`);
+      return;
+    }
     bot.pathfinder.setGoal(new GoalFollow(target, distance), true);
   }
 

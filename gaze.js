@@ -13,7 +13,7 @@ function getPlayerGazeTarget(bot, maxDistance = DEFAULT_RANGE) {
   const masterEntity = bot.players[MASTER]?.entity;
   if (!masterEntity?.position) return { block: null, entity: null, position: null };
 
-  const eye = masterEntity.position.offset(0, masterEntity.height, 0);
+  const eye = masterEntity.position.offset(0, masterEntity.eyeHeight ?? 1.62, 0);
   const { yaw, pitch } = masterEntity;
   const cosPitch = Math.cos(pitch);
   const dir = new Vec3(
@@ -42,7 +42,7 @@ function getPlayerGazeTarget(bot, maxDistance = DEFAULT_RANGE) {
       break;
     }
 
-    if (AIR.has(b.name) || b.boundingBox === 'empty') continue;
+    if (AIR.has(b.name)) continue;
     block = b;
     blockDist = eye.distanceTo(b.position.offset(0.5, 0.5, 0.5));
     break;

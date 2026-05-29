@@ -8,8 +8,9 @@ const { setBehavior } = require('./behavior');
 const { createMovements } = require('./movement');
 const { isHostileMob } = require('./combat');
 const { queryLetta, parseAction, chatLong } = require('./letta');
-const { MASTER, BOT_USERNAME, DEATH_VERBS, ADVANCEMENT_RE, JOIN_RE, LEAVE_RE, getServerConfig } = require('./config');
+const { MASTER, BOT_USERNAME, DEATH_VERBS, ADVANCEMENT_RE, getServerConfig } = require('./config');
 const { goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { getModdedBlockName } = require('./registry-patch');
 
 // ── Session hint ──────────────────────────────────────────────────────────────
 
@@ -29,14 +30,12 @@ function startProximityMonitor(bot) {
 
   let wasInRange              = false;
   let lowHealthWarned         = false;
-  let lastGreetTime           = 0;
   let lastFollowComplaintTime = 0;
   let lastThreatWarnTime      = 0;
   let knownThreats            = new Set(); // entity IDs seen this threat cycle
   const RANGE                    = 15;
   const LOW_HEALTH               = 8; // out of 20
   const THREAT_RANGE             = 16;
-  const GREET_COOLDOWN_MS        = 120000; // 2 min between greets
   const FOLLOW_COMPLAINT_COOLDOWN_MS = 90000;
   const THREAT_WARN_COOLDOWN_MS  = 20000;  // 20s between threat warnings
   const STARTUP_GRACE_MS         = 30000;  // suppress all proactive events for 30s after join
@@ -85,19 +84,7 @@ function startProximityMonitor(bot) {
     const inRange = dist <= RANGE;
     const now   = Date.now();
 
-    if (inRange && !wasInRange) {
-      wasInRange = true;
-      if (now - startTime > STARTUP_GRACE_MS && now - lastGreetTime >= GREET_COOLDOWN_MS) {
-        lastGreetTime = now;
-        try {
-          const response = await queryLetta(
-            `${sessionHintFor(MASTER)}[PROXIMITY EVENT] PrizmoElectric just came within ${Math.floor(dist)} blocks of you. Greet them briefly in character.\n[Respond in: en]`
-          );
-          const { text: greetText } = parseAction(response);
-          if (greetText) await chatLong(bot, greetText);
-        } catch (_) {}
-      }
-    }
+    if (inRange && !wasInRange) wasInRange = true;
 
     if (!inRange && wasInRange) {
       wasInRange = false;
@@ -119,6 +106,9 @@ function startProximityMonitor(bot) {
 
 function startAutonomousBehaviors(bot) {
   if (state.autonomousInterval) clearInterval(state.autonomousInterval);
+
+  const CONTAINER_KEYWORDS = ['chest', 'barrel', 'crate', 'storage', 'bin', 'locker', 'safe', 'cabinet', 'trunk', 'box', 'vault', 'strongbox', 'terminal', 'interface', 'grid', 'cable_bus'];
+  const triedContainers = new Set(); // block positions that failed openContainer — skip them
 
   let lookCooldown    = 0;
   let exploreCooldown = 0;
@@ -146,14 +136,26 @@ function startAutonomousBehaviors(bot) {
     if (exploreCooldown > 0) { exploreCooldown--; return; }
     exploreCooldown = 4 + Math.floor(Math.random() * 4); // 8–16s between steps
 
-    // Check for nearby chests first
+    // Check for nearby containers (vanilla + modded — matched by name keywords)
     const chestBlock = bot.findBlock({
-      matching: b => b.name === 'chest' || b.name === 'trapped_chest',
+      matching: b => {
+        if (!b) return false;
+        let name = (b.name || '').toLowerCase();
+        if (!name && b.stateId != null) name = (getModdedBlockName(b.stateId) || '').toLowerCase();
+        if (!name || name === 'unknown') return false;
+        if (!CONTAINER_KEYWORDS.some(kw => name.includes(kw))) return false;
+        if (b.position) {
+          const key = `${b.position.x},${b.position.y},${b.position.z}`;
+          if (triedContainers.has(key)) return false;
+        }
+        return true;
+      },
       maxDistance: 24,
     });
 
     if (chestBlock) {
       state.isLooting = true;
+      const key = `${chestBlock.position.x},${chestBlock.position.y},${chestBlock.position.z}`;
       try {
         const movements = createMovements(bot);
         bot.pathfinder.setMovements(movements);
@@ -167,13 +169,14 @@ function startAutonomousBehaviors(bot) {
           ? items.slice(0, 6).map(i => `${i.count}x ${i.name}`).join(', ')
           : 'nothing';
         const response = await queryLetta(
-          `[AUTONOMOUS] While exploring you found and opened a chest at (${p.x},${p.y},${p.z}). ` +
+          `[AUTONOMOUS] While exploring you found and opened a ${chestBlock.name} at (${p.x},${p.y},${p.z}). ` +
           `Contents: ${preview}. React briefly in character — curiosity, excitement, or disappointment.\n[Respond in: en]`
         );
         const { text: chestText } = parseAction(response);
         if (chestText) await chatLong(bot, chestText);
       } catch (err) {
-        console.error('[NILO] Chest loot error:', err.message);
+        console.error(`[NILO] Container open failed (${chestBlock.name}): ${err.message}`);
+        triedContainers.add(key); // don't retry blocks that can't be opened
       }
       state.isLooting = false;
       return;
@@ -216,16 +219,6 @@ function handleLogEvent(payload) {
   if (!bot) return;
 
   let eventMsg = null;
-
-  const joinMatch = payload.match(JOIN_RE);
-  if (joinMatch && joinMatch[1] !== BOT_USERNAME) {
-    eventMsg = `[SERVER EVENT] ${joinMatch[1]} joined the server.`;
-  }
-
-  const leaveMatch = payload.match(LEAVE_RE);
-  if (leaveMatch && leaveMatch[1] !== BOT_USERNAME) {
-    eventMsg = `[SERVER EVENT] ${leaveMatch[1]} left the server.`;
-  }
 
   const deathMatch = payload.match(DEATH_VERBS);
   if (deathMatch && deathMatch[1] !== BOT_USERNAME) {

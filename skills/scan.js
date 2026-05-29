@@ -16,9 +16,8 @@ async function runScan(bot, raw) {
   bot.chat(`Scanning ${radius}-block radius...`);
 
   const pos     = bot.entity.position.floored();
-  const counts  = {};   // name → count
-  const sidSets = {};   // name → Set of state IDs seen for that name
-  const AIR = new Set(['air', 'cave_air', 'void_air']);
+  const counts = {};   // name → count
+  const AIR    = new Set(['air', 'cave_air', 'void_air']);
 
   for (let x = pos.x - radius; x <= pos.x + radius; x++) {
     for (let y = Math.max(-64, pos.y - radius); y <= Math.min(320, pos.y + radius); y++) {
@@ -33,24 +32,18 @@ async function runScan(bot, raw) {
           if (AIR.has(b.name)) continue;
           name = b.name;
         } else {
-          name = getModdedBlockName(sid) || 'unknown';
+          name = getModdedBlockName(sid) || `unknown:${sid}`;
         }
 
-        counts[name]  = (counts[name]  || 0) + 1;
-        if (!sidSets[name]) sidSets[name] = new Set();
-        sidSets[name].add(sid);
+        counts[name] = (counts[name] || 0) + 1;
       }
     }
   }
 
-  // Build rows: one entry per block name, sids appended for easy blockmap use
+  // Build rows sorted by frequency
   const sorted = Object.entries(counts)
     .sort(([, a], [, b]) => b - a)
-    .map(([name, count]) => {
-      const sids = [...sidSets[name]].sort((a, b) => a - b);
-      const sidLabel = sids.length === 1 ? `sid:${sids[0]}` : `sids:${sids.join(',')}`;
-      return [`${name} [${sidLabel}]`, count];
-    });
+    .map(([name, count]) => [name, count]);
 
   if (!sorted.length) {
     bot.chat('Nothing around me (Check if chunks are loaded).');

@@ -29,6 +29,7 @@ let vanillaMax      = 0;
 // DB entries always win so the player can teach Nilo correct physics conversationally.
 
 const BLOCK_PHYSICS = {
+  passable:              { boundingBox: 'empty', transparent: true,  shapes: [] },
   grass:                 { boundingBox: 'empty', transparent: true,  shapes: [] },
   tall_grass:            { boundingBox: 'empty', transparent: true,  shapes: [] },
   fern:                  { boundingBox: 'empty', transparent: true,  shapes: [] },
@@ -73,7 +74,16 @@ function getPhysicsForName(name) {
     };
   }
   if (BLOCK_PHYSICS[name]) return BLOCK_PHYSICS[name];
-  // Heuristic: common solid block name patterns
+  // Modded blocks (contain ':') default to solid — wrong physics is less harmful than being invisible.
+  // The player can override with "X is passable" teaching.
+  if (name.includes(':')) {
+    return {
+      boundingBox: 'block',
+      transparent: name.includes('glass'),
+      shapes:      [[0, 0, 0, 1, 1, 1]],
+    };
+  }
+  // Vanilla heuristic: common solid name patterns
   const isSolid = name.includes('brick') || name.includes('stone') || name.includes('plank')
     || (name.includes('glass') && !name.includes('pane'));
   return {
@@ -130,7 +140,18 @@ function logUncertain(entries) {
   try { fs.appendFileSync(UNCERTAIN_LOG, lines.join('\n') + '\n', 'utf8'); } catch (_) {}
 }
 
-// ── VarInt / String reader ────────────────────────────────────────────────────
+// ── VarInt / String reader+writer ────────────────────────────────────────────
+
+function writeVarInt(value) {
+  const bytes = [];
+  do {
+    let byte = value & 0x7f;
+    value >>>= 7;
+    if (value !== 0) byte |= 0x80;
+    bytes.push(byte);
+  } while (value !== 0);
+  return Buffer.from(bytes);
+}
 
 function readVarInt(buf, offset) {
   let result = 0, shift = 0, byte;
@@ -150,24 +171,93 @@ function readString(buf, offset) {
   return { value: str, offset: offset + len.value };
 }
 
+// ── Early-registration helpers ────────────────────────────────────────────────
+// The server sends fabric-networking-api-v1:early_registration during the login
+// phase with a list of channels it supports. We parse it and respond with only
+// the registry-sync channels — nothing else, to avoid triggering verification
+// that Nilo can't pass.
+
+const REGISTRY_SYNC_CHANNELS = [
+  'fabric:registry/sync/direct',   // Fabric API v2 play-phase (1.20.1 Prominence 2)
+  'fabric:registry/sync/full',
+  'fabric:registry_sync',
+  'fabric-registry-sync-v1:registry_sync',
+  'fabric-registry-sync-v0:registry_sync',
+  'fabric-registry-sync-v0:registry/sync',
+];
+
+function parseEarlyRegistrationChannels(buf) {
+  // Format: null-separated UTF-8 channel names (same as minecraft:register).
+  // No count prefix, no length prefixes — just "ch1\0ch2\0ch3".
+  if (!buf || !buf.length) return [];
+  return buf.toString('utf8').split('\0').map(s => s.trim()).filter(Boolean);
+}
+
+function buildEarlyRegistrationResponse(packetData) {
+  const serverChannels = parseEarlyRegistrationChannels(packetData);
+  const registryCh = serverChannels.filter(ch => ch.includes('registry') || ch.includes('sync'));
+  console.log(`[REGISTRY] early_registration: ${serverChannels.length} channels total, registry-related: [${registryCh.join(', ') || 'none'}]`);
+  const want = serverChannels.filter(ch => REGISTRY_SYNC_CHANNELS.includes(ch));
+  if (want.length === 0) return Buffer.from([0x00]);
+  console.log('[REGISTRY] Requesting login channels:', want.join(', '));
+  const parts = [writeVarInt(want.length)];
+  for (const ch of want) {
+    const enc = Buffer.from(ch, 'utf8');
+    parts.push(writeVarInt(enc.length), enc);
+  }
+  return Buffer.concat(parts);
+}
+
+function handleLoginRegistrySync(packetData) {
+  const data     = parseFabricRegistrySync(packetData);
+  const blockKey = Object.keys(data).find(k => k.includes('block'));
+  const itemKey  = Object.keys(data).find(k => k.includes('item'));
+
+  if (blockKey) {
+    moddedBlocks = Object.entries(data[blockKey])
+      .filter(([name]) => !name.startsWith('minecraft:'))
+      .map(([name, blockId]) => ({ name, blockId }))
+      .sort((a, b) => a.blockId - b.blockId);
+    console.log(`[REGISTRY] Login sync: ${moddedBlocks.length} modded block names`);
+  }
+
+  if (itemKey) {
+    const moddedItems = Object.entries(data[itemKey])
+      .filter(([name]) => !name.startsWith('minecraft:'))
+      .map(([name, itemId]) => ({ name, itemId }))
+      .sort((a, b) => a.itemId - b.itemId);
+    console.log(`[REGISTRY] Login sync: ${moddedItems.length} modded item names`);
+  }
+
+  if (!blockKey) {
+    console.warn('[REGISTRY] Login sync: no block registry found. Keys:', Object.keys(data).join(', ') || '(none parsed)');
+  }
+}
+
 // ── Fabric registry sync parser ───────────────────────────────────────────────
 
 function parseFabricRegistrySync(buf) {
+  // Try parsing from offset 0 first. If the first VarInt looks like a boolean
+  // flag byte (0x00 or 0x01 followed by a plausible registry count), try offset 1.
+  for (const startOffset of [0, 1]) {
+    const result = _tryParseRegistries(buf, startOffset);
+    if (result !== null) return result;
+  }
+  console.warn('[REGISTRY] Parse failed at both offset 0 and 1');
+  return {};
+}
+
+function _tryParseRegistries(buf, startOffset) {
   const registries = {};
-  let offset = 0;
+  let offset = startOffset;
   try {
-    const peek = readVarInt(buf, 0);
-    let count = peek.value;
-    offset = peek.offset;
-    if (count > 1000) {
-      offset = 1;
-      const retry = readVarInt(buf, offset);
-      count = retry.value;
-      offset = retry.offset;
-    }
+    const countR = readVarInt(buf, offset); offset = countR.offset;
+    const count  = countR.value;
+    if (count <= 0 || count > 50000) return null; // sanity check
     for (let r = 0; r < count; r++) {
       const regName    = readString(buf, offset); offset = regName.offset;
       const entryCount = readVarInt(buf, offset);  offset = entryCount.offset;
+      if (entryCount.value < 0 || entryCount.value > 1000000) return null;
       const entries = {};
       for (let e = 0; e < entryCount.value; e++) {
         const name = readString(buf, offset); offset = name.offset;
@@ -176,10 +266,10 @@ function parseFabricRegistrySync(buf) {
       }
       registries[regName.value] = entries;
     }
-  } catch (err) {
-    console.warn('[REGISTRY] Parse error (partial data may still work):', err.message);
+    return registries;
+  } catch (_) {
+    return null;
   }
-  return registries;
 }
 
 // ── Gap-analysis assignment ───────────────────────────────────────────────────
@@ -191,8 +281,11 @@ function parseFabricRegistrySync(buf) {
 function resolveMapping(bot) {
   if (!moddedBlocks.length || !vanillaMax) return;
 
+  // Include all discovered modded IDs, even ones already in the registry.
+  // !bot.registry.blocksByStateId[id] would wrongly exclude previously-patched
+  // IDs (the registry is shared across reconnects), preventing re-analysis.
   const unknownIds = [...discovered]
-    .filter(id => id > vanillaMax && !bot.registry.blocksByStateId[id])
+    .filter(id => id > vanillaMax)
     .sort((a, b) => a - b);
 
   if (!unknownIds.length) return;
@@ -345,6 +438,47 @@ function scanColumn(column) {
   return found;
 }
 
+// ── Ground-truth source (context mod) ────────────────────────────────────────
+
+function applyGroundTruth(bot, mappings) {
+  // mappings: {stateId (string) → name (string)} from the server-side Fabric mod.
+  // Confidence 'ground_truth' beats all heuristic tiers but not 'manual'.
+  let applied = 0;
+  let mismatches = 0;
+
+  for (const [idStr, name] of Object.entries(mappings)) {
+    const id = parseInt(idStr);
+    if (!id || !name) continue;
+    if (manualOverrides[id]) continue; // manual always wins
+
+    const existing = resolved[id];
+    if (existing && existing.confidence !== 'ground_truth' && existing.name !== name) {
+      console.log(
+        `[CTX-MOD] Mismatch stateId ${id}: gap-analysis="${existing.name}" (${existing.confidence}) → ground-truth="${name}"`
+      );
+      mismatches++;
+    }
+
+    if (!existing || existing.name !== name || existing.confidence !== 'ground_truth') {
+      resolved[id] = { name, confidence: 'ground_truth' };
+      applied++;
+    }
+  }
+
+  if (applied > 0) {
+    stmtUpsertMany(
+      Object.entries(mappings)
+        .filter(([idStr]) => !manualOverrides[parseInt(idStr)])
+        .map(([idStr, name]) => [parseInt(idStr), { name, source: 'ground_truth', confidence: 'ground_truth' }])
+    );
+    patchRegistryFromResolved(bot);
+    console.log(`[CTX-MOD] Ground truth: ${applied} applied, ${mismatches} corrected gap-analysis mismatches`);
+  }
+}
+
+function getDiscovered() { return discovered; }
+function getResolved()   { return resolved; }
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function getModdedBlockName(stateId) {
@@ -390,41 +524,158 @@ function setManualBlockPhysics(bot, name, boundingBox, taughtBy) {
   console.log(`[REGISTRY] Block physics taught: ${name} → boundingBox=${boundingBox}`);
 }
 
+// ── Block interaction learner ─────────────────────────────────────────────────
+// Watches blockUpdate events. Any stateId > vanillaMax that isn't already
+// resolved or manually mapped gets added to discovered, then resolveMapping()
+// runs (debounced) to try to name it via gap-analysis.
+// No held-item data — only the block's own stateId is used.
+
+// ── Proximity passive scan ────────────────────────────────────────────────────
+// While following or moving, samples stateIds from a small radius around Nilo
+// in already-loaded chunks every 5 seconds. Any unknown modded stateId gets
+// added to discovered and triggers resolveMapping().
+// Radius is intentionally small (6 blocks) — this is not a scan, just
+// incidental discovery as Nilo walks through the world.
+
+// ── findBlocksByName ──────────────────────────────────────────────────────────
+// Registry-independent block search. Reads stateIds directly from the world
+// (same approach as scan.js) so it works for any modded block regardless of
+// whether it has been patched into bot.registry yet.
+// keyword: substring to match against block name (e.g. 'chest', 'barrel')
+// Returns: array of Vec3 positions (up to maxCount), sorted nearest-first.
+
+function findBlocksByName(bot, keyword, maxDistance = 32, maxCount = 20) {
+  const kw  = keyword.toLowerCase();
+  const pos = bot.entity.position.floored();
+  const hits = [];
+
+  for (let x = pos.x - maxDistance; x <= pos.x + maxDistance && hits.length < maxCount; x++) {
+    for (let y = Math.max(-64, pos.y - maxDistance); y <= Math.min(320, pos.y + maxDistance) && hits.length < maxCount; y++) {
+      for (let z = pos.z - maxDistance; z <= pos.z + maxDistance && hits.length < maxCount; z++) {
+        const vec = { x, y, z };
+        const sid = bot.world.getBlockStateId(vec);
+        if (!sid) continue;
+
+        const b    = bot.blockAt(vec);
+        const name = (b?.name && b.name !== '' && b.name !== 'unknown')
+          ? b.name
+          : (getModdedBlockName(sid) || '');
+
+        if (name && name.toLowerCase().includes(kw)) hits.push({ x, y, z });
+      }
+    }
+  }
+
+  hits.sort((a, b) => {
+    const da = Math.hypot(a.x - pos.x, a.y - pos.y, a.z - pos.z);
+    const db = Math.hypot(b.x - pos.x, b.y - pos.y, b.z - pos.z);
+    return da - db;
+  });
+
+  const Vec3 = require('vec3');
+  return hits.map(({ x, y, z }) => new Vec3(x, y, z));
+}
+
+function installProximityLearner(bot, state) {
+  const RADIUS   = 6;
+  const INTERVAL = 5000;
+
+  setInterval(() => {
+    if (!vanillaMax) return;
+    if (state.behaviorMode === 'idle') return; // only learn while moving
+
+    const pos = bot.entity.position.floored();
+    let pendingResolve = false;
+
+    for (let x = pos.x - RADIUS; x <= pos.x + RADIUS; x++) {
+      for (let y = Math.max(-64, pos.y - RADIUS); y <= Math.min(320, pos.y + RADIUS); y++) {
+        for (let z = pos.z - RADIUS; z <= pos.z + RADIUS; z++) {
+          const sid = bot.world.getBlockStateId({ x, y, z });
+          if (!sid || sid <= vanillaMax) continue;
+          if (resolved[sid] || manualOverrides[sid] || discovered.has(sid)) continue;
+          discovered.add(sid);
+          pendingResolve = true;
+        }
+      }
+    }
+
+    if (pendingResolve) resolveMapping(bot);
+  }, INTERVAL);
+}
+
+function installBlockUpdateLearner(bot) {
+  let learnTimer    = null;
+  let pendingResolve = false;
+
+  function maybeDiscover(sid) {
+    if (!sid || sid <= vanillaMax) return;
+    if (resolved[sid] || manualOverrides[sid] || discovered.has(sid)) return;
+    discovered.add(sid);
+    pendingResolve = true;
+  }
+
+  bot.on('blockUpdate', (oldBlock, newBlock) => {
+    if (!vanillaMax) return;
+    if (oldBlock) maybeDiscover(oldBlock.stateId);
+    maybeDiscover(newBlock.stateId);
+
+    if (pendingResolve && !learnTimer) {
+      learnTimer = setTimeout(() => {
+        learnTimer      = null;
+        pendingResolve  = false;
+        resolveMapping(bot);
+      }, 500);
+    }
+  });
+}
+
 // ── Install ───────────────────────────────────────────────────────────────────
 
-const SYNC_CHANNELS = [
-  'fabric-registry-sync-v0:registry_sync',
-  'fabric-registry-sync-v1:registry_sync',
-  'fabric:registry_sync',
-  'fabric-registry-sync-v0:registry/sync',
-];
+const SYNC_CHANNELS = REGISTRY_SYNC_CHANNELS; // play-phase fallback = same set
+
+const MOD_BLOCK_LIST = path.join(__dirname, 'mod-block-list.json');
+
+function loadModBlockList() {
+  if (moddedBlocks.length) return; // already populated by Fabric sync
+  try {
+    const names = JSON.parse(fs.readFileSync(MOD_BLOCK_LIST, 'utf8'));
+    moddedBlocks = names.map((name, i) => ({ name, blockId: i }));
+    console.log(`[REGISTRY] Loaded ${moddedBlocks.length} block names from mod-block-list.json`);
+  } catch (_) {
+    console.warn('[REGISTRY] mod-block-list.json not found — run: node scan-mod-blocks.js');
+  }
+}
 
 function installRegistryPatch(bot) {
   loadFromDB();
 
+  // Fabric registry sync (play-phase) — catches servers that do send block registry
   bot._client.on('custom_payload', (packet) => {
     if (!SYNC_CHANNELS.some(ch => packet.channel === ch)) return;
     const data = packet.data;
     if (!data?.length) return;
-
     console.log(`[REGISTRY] Sync packet on ${packet.channel} (${data.length} bytes)`);
     const registries = parseFabricRegistrySync(data);
     const blockKey   = Object.keys(registries).find(k => k.includes('block'));
-    if (!blockKey) {
-      console.warn('[REGISTRY] No block registry in packet. Keys:', Object.keys(registries).join(', '));
-      return;
-    }
-
+    if (!blockKey) return;
     moddedBlocks = Object.entries(registries[blockKey])
       .filter(([name]) => !name.startsWith('minecraft:'))
       .map(([name, blockId]) => ({ name, blockId }))
       .sort((a, b) => a.blockId - b.blockId);
-
-    console.log(`[REGISTRY] Captured ${moddedBlocks.length} modded block names`);
+    console.log(`[REGISTRY] Captured ${moddedBlocks.length} modded block names from ${blockKey}`);
   });
 
   bot.once('spawn', () => {
-    vanillaMax = Math.max(...Object.keys(bot.registry.blocksByStateId).map(Number));
+    // Fall back to JAR-scanned list if no Fabric sync was received
+    loadModBlockList();
+
+    // Compute vanillaMax once from the unpatched registry. On reconnect the
+    // registry object is shared (Node module cache) and already contains
+    // patched modded state IDs — recomputing would give a wrong high value
+    // that would exclude all modded IDs from gap analysis.
+    if (!vanillaMax) {
+      vanillaMax = Math.max(...Object.keys(bot.registry.blocksByStateId).map(Number));
+    }
     console.log(`[REGISTRY] Vanilla ceiling: stateId ${vanillaMax} | tracking ${moddedBlocks.length} modded blocks`);
 
     if (Object.keys(manualOverrides).length || Object.keys(resolved).length) {
@@ -452,4 +703,4 @@ function installRegistryPatch(bot) {
   console.log('[REGISTRY] Registry patch installed — waiting for Fabric sync + spawn');
 }
 
-module.exports = { installRegistryPatch, getModdedBlockName, getConfidence, setManualOverride, getStateIdsByName, setManualBlockPhysics };
+module.exports = { installRegistryPatch, installBlockUpdateLearner, installProximityLearner, findBlocksByName, getModdedBlockName, getConfidence, setManualOverride, getStateIdsByName, setManualBlockPhysics, buildEarlyRegistrationResponse, handleLoginRegistrySync, REGISTRY_SYNC_CHANNELS, applyGroundTruth, getDiscovered, getResolved };

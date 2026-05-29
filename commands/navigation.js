@@ -6,6 +6,7 @@ const { createMovements, startFollow, tryUnstuck } = require('../movement');
 const { startAssist } = require('../combat');
 const { MASTER } = require('../config');
 const { cmd } = require('./_util');
+const { getPlayerGazeTarget } = require('../gaze');
 
 const IS_FOLLOW = cmd([
   /\bfollow\b/,
@@ -48,13 +49,14 @@ const IS_STAY = cmd([
 const IS_SIT    = cmd([/\bsit\b/, /\bsenta\b/]);
 const IS_WANDER = cmd([/\bwander\b/, /\bvagabundeia\b/]);
 const IS_TP_TO_ME = cmd([
-  /\btp (to )?me\b/, /\bteleport (to )?me\b/, /\bcome (here|to me) (now|fast|quick|instantly)\b/,
+  /\btp (to )?me\b/, /\btp here\b/, /\bteleport (to )?me\b/, /\bcome (here|to me) (now|fast|quick|instantly)\b/,
   /\bvem aqui agora\b/, /\btp para mim\b/, /\bteleporta para mim\b/, /\bse teleporta para mim\b/,
 ]);
 const IS_TP_ME_TO_YOU = cmd([
   /\btp me to you\b/, /\bteleport me to you\b/, /\bring me (to you|here)\b/, /\bpull me (to you|here)\b/,
   /\btp eu para (você|vc)\b/, /\bteleporta eu para (você|vc)\b/, /\bme traz para (você|vc)\b/,
 ]);
+const TP_PLAYER_TO_PLAYER = /\b(?:tp|teleport)\s+(\w+)\s+to\s+(\w+)\b/i;
 const IS_STOP_EXPLORE = cmd([
   /\bstop exploring\b/, /\bdon'?t explore\b/, /\bstop wandering\b/, /\bdon'?t wander\b/,
   /\bpara de explorar\b/, /\bn[aã]o explora\b/, /\bfica parado\b/,
@@ -66,7 +68,6 @@ const IS_EXPLORE = cmd([
 
 async function handle(bot, lower, raw) {
   if (IS_FOLLOW(lower)) {
-    bot.setControlState('sneak', false);
     startFollow(bot, MASTER, 2);
     bot.chat('On my way.');
     return true;
@@ -156,6 +157,15 @@ async function handle(bot, lower, raw) {
     return true;
   }
 
+  const tpMatch = TP_PLAYER_TO_PLAYER.exec(lower);
+  if (tpMatch) {
+    const resolve = n => (n === 'me' ? MASTER : n === 'you' ? bot.username : n);
+    const from = resolve(tpMatch[1]);
+    const to   = resolve(tpMatch[2]);
+    bot.chat(`/tp ${from} ${to}`);
+    return true;
+  }
+
   if (IS_TP_TO_ME(lower)) {
     const player = bot.players[MASTER]?.entity;
     if (!player) { bot.chat("I can't see you."); return true; }
@@ -188,6 +198,27 @@ async function handle(bot, lower, raw) {
   if (/\b(look at me|look here|olha pra mim|me olha|olha aqui|olha pra c[aá])\b/.test(lower)) {
     const target = bot.players[MASTER]?.entity;
     if (target) await bot.lookAt(target.position.offset(0, target.height, 0));
+    return true;
+  }
+
+  // Press/activate what MASTER is looking at — "press button", "press this", "push lever"
+  if (/\b(press|push|click|activate|aperta|empurra)\b/.test(lower)
+   && /\b(button|lever|switch|plate|it|this|that|bot[aã]o|alavanca)\b/.test(lower)
+   && !/\d.*\d.*\d/.test(lower)) {  // no three numbers → not the coordinate-based handler
+    const { block } = getPlayerGazeTarget(bot, 8);
+    if (!block?.position) { bot.chat("I don't see anything to press."); return true; }
+    const p = block.position;
+    const movements = createMovements(bot);
+    bot.pathfinder.setMovements(movements);
+    try {
+      await bot.pathfinder.goto(new GoalNear(p.x, p.y, p.z, 3));
+      await bot.lookAt(p.offset(0.5, 0.5, 0.5), true);
+      await bot.activateBlock(bot.blockAt(p));
+      bot.chat('Done.');
+    } catch (err) {
+      console.error('[NILO] Press gaze target error:', err.message);
+      bot.chat("Couldn't press that.");
+    }
     return true;
   }
 

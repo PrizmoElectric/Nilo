@@ -1,4 +1,4 @@
-const state = require('../state');
+const state    = require('../state');
 const { setBehavior } = require('../behavior');
 const { MASTER } = require('../config');
 const { cmd } = require('./_util');
@@ -16,7 +16,7 @@ const IS_SPIN = cmd([
   /\bgira\b/, /\bd[aá] uma volta\b/, /\bda um giro\b/,
 ]);
 const IS_WAVE   = cmd([/\bwave\b/, /\bwave at\b/, /\bswing your arm\b/, /\bacena\b/, /\bbalança o braço\b/]);
-const IS_CROUCH = cmd([/\bcrouch\b/, /\bduck\b/, /\bsneak down\b/, /\bagacha\b/, /\babaixa\b/]);
+const IS_CROUCH = cmd([/\bcrouch\b/, /\bduck\b/, /\bsneak\b/, /\bagacha\b/, /\babaixa\b/]);
 const IS_STAND  = cmd([
   /\bstand up\b/, /\buncrouch\b/, /\bstop sneaking\b/, /\bstop crouching\b/, /\bget up\b/,
   /\blevanta\b/, /\bpara de agachar\b/, /\bfica em p[eé]\b/,
@@ -42,6 +42,7 @@ async function handle(bot, lower, raw) {
         bot.setControlState('jump', true);
         await new Promise(r => setTimeout(r, 250));
         bot.setControlState('jump', false);
+        if (state.isSneaking) bot.setControlState('sneak', true);
         await new Promise(r => setTimeout(r, 400));
       }
     })();
@@ -107,12 +108,14 @@ async function handle(bot, lower, raw) {
   }
 
   if (IS_CROUCH(lower)) {
+    state.isSneaking = true;
     bot.setControlState('sneak', true);
     bot.chat('*crouches*');
     return true;
   }
 
   if (IS_STAND(lower)) {
+    state.isSneaking = false;
     bot.setControlState('sneak', false);
     if (state.behaviorMode === 'sit') setBehavior(bot, 'idle', MASTER);
     bot.chat('*stands up*');

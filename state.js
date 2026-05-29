@@ -8,6 +8,8 @@ const state = {
   autonomousInterval:    null,
   exploringEnabled:      true,
   isLooting:             false,
+  isMining:              false,
+  deathPosition:         null,
   lastInteractionTime:   0,
   justDied:              false,
   behaviorOwner:         null,
@@ -19,6 +21,7 @@ const state = {
   customWeapon:          null,  // modded weapon name set by "use X as weapon"
   discordContext:        false, // true while handling a Discord message — bot.chat skips in-game
   scans:                 [],    // [{text, stamp, radius, rows}, ...] newest first — for echo
+  isSneaking:            false, // persists sneak across pathfinder resets and behavior changes
 };
 
 module.exports = state;

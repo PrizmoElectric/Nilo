@@ -10,6 +10,8 @@ const IS_GUARD  = cmd([
   /\bguard\b/, /\bguarda\b/, /\bsentinela\b/, /\bvigia\b/, /\bwatch (this |the )?(area|place|spot)\b/,
   /\bprotect (this |the )?(area|place|spot)\b/, /\bkill (any |all )?(mob|mobs|enemies)\b/,
   /\bfique de guarda\b/, /\bfique aqui e ataque\b/,
+  /\b(combat|melee|fight) mode\b/, /\bgo (melee|combat)\b/, /\bswitch to melee\b/,
+  /\bmodo (combate|melee|luta|briga)\b/, /\bva[ii] de melee\b/,
 ]);
 const IS_DEFENSIVE = cmd([/\bdefensive\b/, /\bdefensivo\b/]);
 const IS_PASSIVE   = cmd([/\bpassive\b/, /\bpassivo\b/]);

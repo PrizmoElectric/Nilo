@@ -52,8 +52,11 @@ function route(level, args) {
   const line = `[${ts}] ${text}`;
 
   // Detect [TAG] prefix — first bracket group of all-caps letters/digits/underscores
-  const match    = text.match(/^\[([A-Z][A-Z_0-9]*)\]/);
-  const category = match ? match[1].toLowerCase() : 'main';
+  const match = text.match(/^\[([A-Z][A-Z_0-9]*)\]/);
+  let category = match ? match[1].toLowerCase() : 'main';
+
+  // PartialReadError spam from mineflayer-protodef — route to its own file
+  if (category === 'main' && text.startsWith('PartialReadError')) category = 'protodef';
 
   getStream(category).write(line + '\n');
 

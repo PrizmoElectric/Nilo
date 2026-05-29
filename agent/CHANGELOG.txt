@@ -3,6 +3,173 @@ NILO — CHANGELOG
 Newest first. Dates are approximate session dates.
 
 ────────────────────────────────────────────────────────
+2026-05-28–29 (session 8)
+────────────────────────────────────────────────────────
+Auto-mapper reconnect fix (registry-patch.js):
+- vanillaMax recomputed from patched registry on reconnect → was 616281
+  instead of 24134. Fixed with if (!vanillaMax) guard.
+- Removed !bot.registry.blocksByStateId[id] from resolveMapping — was
+  silently excluding all patched IDs from re-analysis on reconnect.
+- Confirmed: all reconnects now show vanillaMax=24134 in registry.log.
+
+Ground-truth learning via Zote's context mod:
+- ContextMod.java v1.1.0: GET /blocknames?sids=... → server registry truth.
+- context-mod-client.js: 15s poll, 200-sid batches, applyGroundTruth().
+- 1000-1077 gap-analysis corrections logged per session.
+- Mod rebuilt (v1.1.0) and deployed to server mods folder.
+
+Terminal CLI session:
+- WebSocket server on port 4000 (ws) replaces old HTTP POST API.
+- bot.chat() patched on login to forward Nilo's replies to CLI clients.
+- /home/prizmo/.local/bin/nilo: interactive REPL, colored output,
+  auto-reconnects on Nilo restart (3s retry loop).
+
+New commands (commands/misc.js):
+- "this is <mod:name>": manual stateId override from gaze target.
+- "status": parallel health check of Letta, context mod, viewers, mapper.
+- "stats": health X% (current/max using generic.max_health attribute,
+  correct for modded health pools), hunger, armor (generic.armor attr), XP.
+- "restart" → "Restarting..." / "reboot" → "Rebooting...".
+
+Navigation + behavior fixes:
+- "tp <p1> to <p2>": general tp handler, resolves me/you to real names.
+- Follow >100 blocks → teleports to master instead of pathfinding.
+- Door spam fix: 2-block doors now share cooldown via floor(y/2) key;
+  3s cooldown. Was alternating upper/lower half infinitely at 0.8s.
+- "!" messages (not "!nilo") silently dropped.
+
+Browser views (viewer.js):
+- prismarine-viewer → http://localhost:3007 (3D world view)
+- mineflayer-web-inventory → http://localhost:3000 (inventory)
+- World viewer properly closed before restart; inventory auto-stops on end.
+- Accessible via Tailscale IP (servers bind 0.0.0.0).
+
+────────────────────────────────────────────────────────
+2026-05-25 (session 7)
+────────────────────────────────────────────────────────
+Planning only — no code written.
+
+Mirror feature designed (not implemented):
+- Purpose: recording — Nilo mirrors everything the player does for replay.
+- Chosen approach: server-side Fabric mod that intercepts C2S packets
+  (move, look, dig, interact) and streams them to Nilo over WebSocket.
+  Nilo replays as bot actions. No client mod needed.
+- Added to CHECKLIST.txt → FEATURES TO BUILD.
+
+────────────────────────────────────────────────────────
+2026-05-05 (session 5)
+────────────────────────────────────────────────────────
+Command fixes:
+
+sneak persistence (state.js, commands/physical.js, behavior.js, actions.js,
+commands/navigation.js, nilo.js):
+- Added state.isSneaking flag. Set true on crouch, false on stand/unsneak.
+- bot.clearControlStates() monkey-patched in login handler to re-apply sneak
+  after every pathfinder reset. Fixes sneak being wiped on goal_moved.
+- Removed explicit bot.setControlState('sneak', false) from follow handler
+  in both actions.js and navigation.js.
+- Jump handler (physical.js + actions.js) re-applies sneak after landing.
+- sneak and stand added as dispatchable LLM actions + to Letta action hint.
+- sit case in actions.js now sets state.isSneaking = true.
+- state.isSneaking reset to false on bot disconnect (end event).
+
+Gaze-based commands (commands/inventory.js, commands/navigation.js,
+commands/activities.js):
+- "open it / read chest / open this": raycasts from MASTER's eye (8 blocks),
+  walks to target, calls openContainer, prints contents in chat.
+- "press button / press this / push lever": raycasts, walks, activateBlock.
+  Guard: !/\d.*\d.*\d/ prevents conflict with coordinate-based handler.
+- "mine this / dig that / mine it": raycasts, walks, auto-equips best tool
+  via bot.tool.equipForBlock(), calls bot.dig(block, true). Placed before
+  IS_TUNNEL so "mine this" doesn't trigger tunnel.
+- All three use getPlayerGazeTarget imported at top of each file.
+
+Combat mode (commands/combat.js, actions.js, nilo.js):
+- "combat mode / melee mode / fight mode / go melee / switch to melee"
+  added to IS_GUARD regex. Maps to guard skill (continuous mob attack).
+- guard added as dispatchable LLM action in actions.js.
+- guard added to Letta action hint in nilo.js.
+
+blockname command (commands/registry.js):
+- Added /\bblockname\b/ to IS_BLOCK_MAP regex. Was falling through to Letta
+  and being misread as narrative ("mined 286849 units of thorium ore").
+
+Log fixes:
+
+PartialReadError routing (logger.js):
+- Lines starting with "PartialReadError" now route to protodef.log instead
+  of main.log. Was causing main.log to reach 55MB in a single session.
+
+path_reset spam (nilo.js):
+- Removed console.log for all path_reset events. Stuck handling still fires
+  on reason === 'stuck'. goal_moved / goal_updated no longer logged.
+
+Unknown LLM action spam (actions.js):
+- none / nothing → silent early return (zero log lines).
+- All other unrecognized action names → logged as "LLM-dispatched action: X"
+  only. Removed console.warn("Unknown LLM action: X") from default case.
+
+Modded block auto-recognition (registry-patch.js, commands/inventory.js,
+nilo.js):
+- installBlockUpdateLearner(bot): listens to blockUpdate events. Any stateId
+  > vanillaMax not yet in resolved/manualOverrides/discovered → added to
+  discovered, resolveMapping() called after 500ms debounce. No held-item
+  data — only the block's own stateId used.
+- installProximityLearner(bot, state): 5s interval while Nilo is not idle.
+  Samples 6-block radius around Nilo in already-loaded chunks. Feeds unknown
+  stateIds into discovered → resolveMapping(). Skips idle mode.
+- findBlocksByName(bot, keyword, maxDistance, maxCount): raw world scan
+  (same loop as scan.js), bypasses bot.registry entirely. Works for any
+  modded block as long as the name is in resolved or manualOverrides.
+  Returns Vec3[] sorted nearest-first.
+- findNearbyContainers (inventory.js): replaced bot.findBlocks() with
+  findBlocksByName() calls. Reliable for modded containers without requiring
+  prior registry patching.
+- Both learners wired into nilo.js login handler.
+- All three exported from registry-patch.js.
+
+────────────────────────────────────────────────────────
+2026-05-04 (session 4)
+────────────────────────────────────────────────────────
+Bug diagnosis + fix session (Prominence 2 modded server).
+
+Crash root cause found and fixed (monitor.js):
+- bot.findBlock() internally calls isBlockInSection() which runs the
+  matching function with Block.fromStateId(stateId, 0) for palette
+  fast-filtering. These palette-check blocks have position = null.
+- New container-search matcher accessed b.position.x before any null check.
+  TypeError thrown inside async setInterval callback → unhandled promise
+  rejection → Node.js 25 kills the process silently with no log entry.
+- The crash happened exactly 2 seconds after login (matching the 2000ms
+  setInterval interval, first tick).
+- Fix: check b.name first (valid on palette blocks), then guard b.position
+  before accessing position for the triedContainers lookup.
+
+Handshake improvements (nilo.js, already in codebase this session):
+- forgeconfigapiport:sync_configs now responds with Buffer([0x00])
+  (empty VarInt string) instead of empty buffer. Empty buffer caused
+  IndexOutOfBoundsException on the server — it expected at least a VarInt.
+- forgeconfigapiport:* fallback also updated to Buffer([0x00]).
+- fabric:custom_ingredient_sync responds with [0x01, 0x00] (protocol
+  version 1 + 0 ingredients). Was returning version 0, which the server
+  rejected with "Unknown ingredient sync protocol version: 0".
+- fabric:* fallback sends Buffer([0x00]) instead of empty buffer.
+
+Proximity greet removed (monitor.js):
+- Removed auto-greeting when MASTER enters range (was calling queryLetta).
+  lastGreetTime and GREET_COOLDOWN_MS removed.
+
+Container search broadened (monitor.js):
+- Was only matching 'chest' and 'trapped_chest'.
+- Now matches by keyword list: chest, barrel, crate, storage, bin, locker,
+  safe, cabinet, trunk, box, vault, strongbox.
+- triedContainers Set added — skips blocks that previously failed openContainer.
+
+Scan command simplified (skills/scan.js):
+- Removed per-block sid tracking (sidSets). Output is now just name + count.
+- Unknown modded blocks shown as "unknown:<stateId>" instead of "unknown".
+
+────────────────────────────────────────────────────────
 2026-05-04 (session 3)
 ────────────────────────────────────────────────────────
 Fabric handshake fix + kick diagnostics (nilo.js):
@@ -80,12 +247,6 @@ Fixed code in wrong place:
 - Two require('./config') calls in activities.js merged into one
 
 ────────────────────────────────────────────────────────
-2026-04-29
-────────────────────────────────────────────────────────
-- Fix missing Mineflayer dependency in project description
-- SESSION_RESUME + CHECKLIST updated to reflect end-of-session state
-
-────────────────────────────────────────────────────────
 2026-04-27
 ────────────────────────────────────────────────────────
 - Add restart command — sends intentional disconnect, reconnects after 10s
@@ -128,24 +289,4 @@ Fixed code in wrong place:
 ────────────────────────────────────────────────────────
 2026-04-early  (initial build)
 ────────────────────────────────────────────────────────
-- Bot skeleton: nilo.js entry point, auto-reconnect, chat dispatch
-- config.js: constants + loadConfig/saveConfig (JSON file I/O)
-- state.js: shared mutable runtime state object
-- trust.js: isTrusted / trustPlayer / untrustPlayer / listTrusted
-- lang.js: detectLanguage → 'en' | 'pt-BR'
-- letta.js: queryLetta + parseAction; Letta memory agent integration
-- behavior.js + movement.js: modes (idle/follow/wander/sit/attack/…),
-  door opener, fence-set cleanup, stuck recovery
-- items.js: inventory helpers
-- gaze.js: raycast from MASTER's eye position
-- combat.js: isHostileMob, weapon helpers, bow mode, aim solver
-- activities.js: farm, collectGrave, fishing, buildSimpleHouse, dance, sleep
-- monitor.js: proximity greet, follow complaint, health/threat warnings,
-  server log watcher (joins, deaths, advancements)
-- commands/ initial set: navigation, combat, activities, physical,
-  inventory, skills, trust, registry, misc
-- actions.js: dispatchAction (LLM action → function call)
-- skill-engine.js: Voyager-style Ollama-generated JS skills
-- 12 handcrafted skills added to skills/
-- MASTER + LETTA_URL moved to environment variables
-- Door physics + stuck-state fixes
+- Full architecture documented in agent/map.txt.

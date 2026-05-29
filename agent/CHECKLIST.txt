@@ -1,6 +1,6 @@
 NILO PROJECT — PENDING ITEMS
 ============================
-Last updated: 2026-05-04
+Last updated: 2026-05-28 (session 8)
 Architecture reference: agent/map.txt
 
 ────────────────────────────────────────────────────────
@@ -12,36 +12,126 @@ IN PROGRESS
 ────────────────────────────────────────────────────────
 NEEDS LIVE TEST
 ────────────────────────────────────────────────────────
-[~] Glass physics — teach "chipped:clear_leaded_glass is passable", walk on it.
+[ ] Sneak persists — say "sneak", then walk/follow, confirm Nilo stays crouched.
+    Also confirm "stand up" clears it, and "jump" restores sneak after landing.
 
-[ ] "this" command — test entity (name/kind/hostile/hp), block (name+pos+[sid:N]), nothing.
+[ ] "open it" / "read chest" — look at a chest, confirm Nilo walks to it,
+    opens it, and prints contents in chat.
+
+[ ] "press button" / "press this" — look at a button/lever, confirm Nilo
+    walks to it and activates it.
+
+[ ] "mine this" / "dig this" / "break this" — look at a block, confirm Nilo walks
+    to it, equips correct tool, and digs it. Stone confirmed broken (isMining flag
+    prevents pathfinder goal override). Needs retest with stone.
+
+[ ] "combat mode" / "melee mode" — confirm Nilo switches to guard behavior
+    and starts attacking nearby hostile mobs.
+
+[ ] blockname command — confirm "blockname 286849 create_new_age:thorium_ore"
+    is handled by registry.js (not sent to Letta).
+
+[ ] Container search — confirm modded containers (barrel, crate, etc.) are
+    found and opened; confirm triedContainers skip works on failed blocks.
+
+[ ] "this" command — test entity (name/kind/hostile/hp), block (name+pos+[sid:N]),
+    nothing, Nilo himself ("It's me!"), passable blocks (shows name + sid).
 
 [ ] Block physics teaching — "X is solid/passable" → confirm DB write + pathfinder change.
+    NOTE: teaching "X is air" no longer silently hides blocks — rename to 'passable' instead.
 
 [ ] isHostileMob — confirm DB entities table fires for modded mob names.
 
 [ ] chatLong — trigger a long Letta reply, confirm no message exceeds 256 chars.
 
-[ ] Server switching — "switch server private" with private server running;
-    confirm handshake fix lets Nilo stay connected.
+[ ] Server switching — "switch server private". EasyAuth works on Prominence.
+    Private client server still in progress (not yet testable).
 
-[ ] EasyAuth — join EasyAuth server, confirm /register or /login fires automatically.
+
+
+[x] "!" prefix ignored — confirmed working.
+
+[x] Auto-mapper reconnect fix — confirmed: registry.log shows vanillaMax=24134
+    on all reconnects. Ground truth correcting 1000-1077 mismatches/session.
 
 ────────────────────────────────────────────────────────
 FEATURES TO BUILD
 ────────────────────────────────────────────────────────
-[ ] Internet / wiki search — give Letta a web-search tool so Nilo can answer
-    "how do I craft X?" from live mod wiki content (CurseForge, FTB wiki, etc.)
+── Mirror mode (recording) ─────────────────────────────────────────────────
+
+[ ] Server-side Fabric mod — mirror feature for recording purposes.
+    Intercepts C2S packets from the player: PlayerMoveC2SPacket (position +
+    look), PlayerActionC2SPacket (dig start/stop), PlayerInteractBlockC2SPacket,
+    PlayerInteractEntityC2SPacket, PlayerInteractItemC2SPacket.
+    Forwards timestamped packet stream to Nilo over WebSocket.
+    Nilo replays them as bot actions.
+    No client mod required. Packet fidelity sufficient for recording.
+
+── Modded block auto-recognition ───────────────────────────────────────────
+
+    3 layers are DONE: blockUpdate learner (L1), proximity learner (L2),
+    findBlocksByName raw scan (L3). blockname command = manual escape hatch.
+
+[ ] Block knowledge from digging — ground truth learning (no guessing).
+    When Nilo digs a block: record {stateId, block_name, held_item, success}
+    to nilo.db. On success this is definitive — the stateId is confirmed,
+    the name is confirmed, the correct tool is confirmed. Feeds back into
+    the registry so the auto-mapper can anchor its gap analysis around
+    known-correct entries rather than pure heuristics.
+
+── World memory ─────────────────────────────────────────────────────────────
+
+[ ] Persistent location index — Nilo forgets everything spatial between
+    sessions. Add a locations table to nilo.db: {name, x, y, z, dimension,
+    last_seen, notes}. Populate it as Nilo explores (ore veins found during
+    scan, structures visited, graves collected, etc.). Commands: "remember
+    this place as X", "where is X?", "nearest X". Lets Nilo answer location
+    questions from memory instead of scanning every time.
+
+── Skill refinement ─────────────────────────────────────────────────────────
+
+[ ] Failure context for Letta — when a skill throws an error or Nilo gives
+    up on a task, log {skill, error, game_state_snapshot} to nilo.db.
+    Next time Letta is queried, inject recent failures as context so it can
+    reason about what went wrong and suggest a different approach. No extra
+    infra needed — just richer context in the Letta prompt.
+
+── Mod knowledge — recipes + wiki ──────────────────────────────────────────
+
+[ ] Mod knowledge — recipes + wiki (two steps, do in order):
+    STEP 1: Parse declare_recipes packet (already arriving, causes PartialReadError
+    spam). Write parsed recipes to nilo.db. Answer "how do I craft X?" from DB —
+    no LLM needed. Medium effort.
+    STEP 2: Scrape mod wikis for Prominence 2 (ftbwiki.org + individual mod sites).
+    Chunk text, store in SQLite FTS5 index. Give Letta a wiki_search(query) tool
+    that injects top results into context at query time.
+    NOTE: do NOT fine-tune — use RAG. Fine-tuning teaches style, not facts.
+    Recipes go stale on mod updates; re-scrape wikis per modpack version.
+
+── Browser views ────────────────────────────────────────────────────────────
+
+[ ] Better prismarine viewer — current 3D view uses default prismarine-viewer
+    which doesn't know modded block textures and shows wrong/missing visuals.
+    Goal: Nilo's vision should show what he actually sees, modded blocks included.
 
 ────────────────────────────────────────────────────────
 KNOWN GAPS
 ────────────────────────────────────────────────────────
-[ ] physicTick → physicsTick deprecation warning in Mineflayer (harmless, low priority).
+[ ] physicTick → physicsTick deprecation warning from mineflayer-pvp (harmless, low priority).
 
 [ ] monitor.js watchLog — LOG_PATH now from getServerConfig().log_path; test that
     it reloads correctly when switching servers mid-session.
 
-[ ] blockresolver.js not imported anywhere yet — standalone utility, require explicitly.
+[x] Gaze skips torches — fixed: removed boundingBox === 'empty' skip; eye height
+    corrected to eyeHeight (1.62) instead of height (1.8).
+
+[x] Passable blocks named 'air' invisible to gaze/scan — fixed: 772 DB entries
+    renamed from 'air' → 'passable'. Use blockname <sid> <mod:name> to assign
+    proper names to specific blocks.
+
+[ ] Stone wrongly marked passable — block teaching blindly trusted the gaze
+    result and wrote stone = passable to the DB. Need a confirmation step or
+    sanity check before writing solid blocks as passable.
 
 ────────────────────────────────────────────────────────
 HOUSEKEEPING

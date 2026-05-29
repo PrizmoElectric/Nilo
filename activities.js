@@ -107,6 +107,7 @@ async function runFarm(bot) {
 
 async function collectGrave(bot) {
   clearBehavior(bot);
+  state.isLooting = true;
 
   const graveResolved = resolveBlock(bot, 'yigd:grave');
   const graveBlockId  = graveResolved?.id ?? null;
@@ -117,7 +118,7 @@ async function collectGrave(bot) {
     // Resolve yigd:grave by registry id (works regardless of stateId reordering)
     if (graveBlockId !== null && b.type === graveBlockId) return true;
     // Named modded blocks
-    if (name.includes(':') && (name.includes('grave') || name.includes('tombstone') || name.includes('coffin') || name.includes('soulstone'))) return true;
+    if (name.includes(':') && (name.includes('grave') || name.includes('tombstone') || name.includes('soulstone'))) return true;
     if (['gravestone','tombstone'].some(k => name.includes(k))) return true;
     // Unnamed/unknown modded blocks — mineflayer can't resolve the registry name for
     // many Fabric mods. Match any block with an empty or 'unknown' name that has a
@@ -136,16 +137,17 @@ async function collectGrave(bot) {
   }, maxDistance: 64 });
   if (unknownBlocks.length) console.log('[NILO] Unknown modded blocks nearby:', unknownBlocks.join(' | '));
 
-  const grave = bot.findBlock({
+  const allGraves = bot.findBlocks({
     matching: b => {
       const match = isGraveBlock(b);
       if (match) console.log(`[NILO] Found grave block: "${b.name}" type=${b.type} at ${b.position}`);
       return match;
     },
     maxDistance: 200,
-  });
+    count: 20,
+  }).filter(v => v != null);
 
-  if (!grave) {
+  if (!allGraves.length) {
     const modded = [];
     bot.findBlock({ matching: b => {
       if (b.name.includes(':') && modded.length < 30) modded.push(b.name);
@@ -156,7 +158,14 @@ async function collectGrave(bot) {
     return;
   }
 
-  const p = grave.position;
+  // Pick the grave closest to where we died, falling back to closest to bot
+  const origin = state.deathPosition || bot.entity.position;
+  allGraves.sort((a, b) => a.distanceTo(origin) - b.distanceTo(origin));
+  const gravePos = allGraves[0];
+  const grave = bot.blockAt(gravePos);
+  console.log(`[NILO] Targeting grave at ${gravePos} (death pos: ${state.deathPosition})`);
+
+  const p = gravePos;
   bot.chat(`Found it. Going to ${p.x}, ${p.y}, ${p.z}.`);
 
   try {
@@ -188,7 +197,7 @@ async function collectGrave(bot) {
     const freshGrave = bot.blockAt(new Vec3(p.x, p.y, p.z));
     if (!freshGrave || !isGraveBlock(freshGrave)) {
       bot.chat("The grave disappeared before I could collect it.");
-      console.log('[NILO] Grave block gone after navigation. Was:', grave.name);
+      console.log('[NILO] Grave block gone after navigation. Was:', grave?.name);
       return;
     }
 
@@ -220,6 +229,8 @@ async function collectGrave(bot) {
   } catch (err) {
     console.error('[NILO] Grave collect error:', err.message);
     bot.chat("Something went wrong trying to get my grave.");
+  } finally {
+    state.isLooting = false;
   }
 }
 

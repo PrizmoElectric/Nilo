@@ -5,6 +5,25 @@ const { equipShield } = require('../combat');
 const { createMovements } = require('../movement');
 const { MASTER } = require('../config');
 const { cmd } = require('./_util');
+const { getModdedBlockName, findBlocksByName } = require('../registry-patch');
+const { getPlayerGazeTarget } = require('../gaze');
+
+const STORAGE_KEYWORDS = [
+  'chest', 'barrel', 'crate', 'storage', 'bin', 'locker', 'safe',
+  'cabinet', 'trunk', 'box', 'vault', 'strongbox', 'terminal', 'interface', 'grid', 'cable_bus',
+];
+
+function findNearbyContainers(bot, maxDistance = 32) {
+  const positions = [];
+  for (const kw of STORAGE_KEYWORDS) {
+    for (const pos of findBlocksByName(bot, kw, maxDistance, 20)) {
+      if (!positions.some(p => p.equals(pos))) positions.push(pos);
+      if (positions.length >= 20) break;
+    }
+    if (positions.length >= 20) break;
+  }
+  return positions.map(pos => bot.blockAt(pos)).filter(Boolean);
+}
 
 function itemLabel(item) {
   if (!item) return 'nothing';
@@ -52,6 +71,33 @@ async function handle(bot, lower, raw) {
       if (line.length <= 200) { bot.chat(line); continue; }
       const parts = line.match(/.{1,190}(?:,|$)/g) || [line];
       for (const part of parts) bot.chat(part.trim().replace(/^,\s*/, ''));
+    }
+    return true;
+  }
+
+  // Open what MASTER is looking at — "open it", "open this chest", "read chest"
+  if (/\b(open (it|this|that)|read (the )?chest|check (the )?chest|open (the )?(chest|barrel|box|storage|container|ba[uú]|caixote))\b/.test(lower)) {
+    const { block } = getPlayerGazeTarget(bot, 8);
+    if (!block?.position) { bot.chat("I don't see anything to open."); return true; }
+    const p = block.position;
+    const movements = createMovements(bot);
+    bot.pathfinder.setMovements(movements);
+    try {
+      await bot.pathfinder.goto(new GoalNear(p.x, p.y, p.z, 3));
+      await bot.lookAt(p.offset(0.5, 0.5, 0.5), true);
+      const win = await bot.openContainer(bot.blockAt(p));
+      const items = win.containerItems();
+      if (!items.length) {
+        bot.chat(`${block.name} is empty.`);
+      } else {
+        const summary = items.slice(0, 10).map(i => `${i.count}x ${i.name}`).join(', ');
+        const more = items.length > 10 ? ` (+${items.length - 10} more)` : '';
+        bot.chat(`${block.name}: ${summary}${more}`);
+      }
+      win.close();
+    } catch (err) {
+      console.error(`[NILO] Open gaze failed (${block.name}): ${err.message}`);
+      bot.chat("Couldn't open that.");
     }
     return true;
   }
@@ -169,6 +215,68 @@ async function handle(bot, lower, raw) {
     try { await bot.tossStack(held); bot.chat(`Dropped ${itemLabel(held)}.`); }
     catch (_) { bot.chat("Couldn't drop that."); }
     return true;
+  }
+
+  // Fetch from storage: "bring me X", "get me X", "fetch X [from storage]"
+  {
+    const SKIP = new Set(['that', 'this', 'it', 'isso', 'aqui', 'esse', 'essa']);
+    const m = lower.match(
+      /\b(?:bring|fetch|retrieve|grab)\s+(?:me\s+)?(?:some\s+|an?\s+)?(.+?)(?:\s+from\s+\S.*)?\s*$|(?:get\s+me\s+)(?:some\s+|an?\s+)?(.+?)(?:\s+from\s+\S.*)?\s*$/
+    );
+    if (m) {
+      let rawQ = (m[1] || m[2] || '').trim();
+      if (rawQ && !SKIP.has(rawQ)) {
+        const countM = rawQ.match(/^(\d+)\s+(.+)$/);
+        let takeCount = 64;
+        if (countM) { takeCount = parseInt(countM[1]); rawQ = countM[2].trim(); }
+        const query   = rawQ.replace(/\s+/g, '_').toLowerCase();
+        const querySg = query.endsWith('s') ? query.slice(0, -1) : query;
+
+        const matchItem = i => {
+          const n = i.name.toLowerCase();
+          return n.includes(query) || n.includes(querySg)
+              || (i.displayName || '').toLowerCase().includes(rawQ);
+        };
+
+        const owned = bot.inventory.items().find(matchItem);
+        if (owned) { bot.chat(`I already have ${owned.count}x ${itemLabel(owned)}.`); return true; }
+
+        const containers = findNearbyContainers(bot);
+        if (!containers.length) { bot.chat("I don't see any storage nearby."); return true; }
+
+        bot.chat(`Searching ${containers.length} container(s) for "${rawQ}"...`);
+        state.isLooting = true;
+        const movements = createMovements(bot);
+        bot.pathfinder.setMovements(movements);
+
+        (async () => {
+          try {
+            for (const block of containers) {
+              const p = block.position;
+              try {
+                await bot.pathfinder.goto(new GoalNear(p.x, p.y, p.z, 2));
+                const win = await bot.openContainer(block);
+                const found = win.containerItems().find(matchItem);
+                if (found) {
+                  await win.withdraw(found.type, null, Math.min(found.count, takeCount));
+                  win.close();
+                  const got = bot.inventory.items().find(matchItem);
+                  bot.chat(`Got ${got ? got.count : found.count}x ${itemLabel(found)}.`);
+                  return;
+                }
+                win.close();
+              } catch (err) {
+                console.error(`[STORAGE] ${block.name} at ${p.x},${p.y},${p.z}: ${err.message}`);
+              }
+            }
+            bot.chat(`"${rawQ}" not found in any nearby storage.`);
+          } finally {
+            state.isLooting = false;
+          }
+        })();
+        return true;
+      }
+    }
   }
 
   // Drop/give named item

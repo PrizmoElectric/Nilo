@@ -13,7 +13,7 @@ const IS_SCAN_BLOCKS = cmd([
   /\bquais blocos\b/, /\bblocks? (ao redor|perto)\b/,
 ]);
 const IS_ECHO       = cmd([/\becho\b/, /\brepeat (?:the )?last\b/, /\brepete\b/]);
-const IS_BLOCK_MAP  = cmd([/\bblockmap\b/, /\bmap stateId\b/, /\bidentify block\b/, /\bmapeia bloco\b/]);
+const IS_BLOCK_MAP  = cmd([/\bblockmap\b/, /\bblockname\b/, /\bmap stateId\b/, /\bidentify block\b/, /\bmapeia bloco\b/]);
 const IS_ID_LOCATE  = cmd([/\bid\s+\d+/, /\bwhere is\s+(id|stateid)\s+\d+/, /\b(find|locate)\s+(id|stateid)\s+\d+/]);
 
 // "X is [actually] hostile" / "X is not hostile" / "X is friendly"

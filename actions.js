@@ -4,6 +4,7 @@ const state = require('./state');
 const { setBehavior } = require('./behavior');
 const { createMovements, startFollow, tryUnstuck } = require('./movement');
 const { startAttack, startBowMode, shootAtGazeTarget } = require('./combat');
+const skillEngine = require('./skill-engine');
 const { startTunnel } = require('./skills/tunnel');
 const { collectGrave, startFishing, buildSimpleHouse, startDance, sleepInBed } = require('./activities');
 const { ensureTools } = require('./skills/crafting');
@@ -12,10 +13,20 @@ const { goals: { GoalNear } } = require('mineflayer-pathfinder');
 // ── Action dispatch ───────────────────────────────────────────────────────────
 
 function dispatchAction(bot, action, username) {
+  if (!action || action === 'none' || action === 'nothing') return;
   console.log(`[NILO] LLM-dispatched action: ${action}`);
   switch (action) {
-    case 'follow':
+    case 'sneak':
+      state.isSneaking = true;
+      bot.setControlState('sneak', true);
+      bot.chat('*crouches*');
+      break;
+    case 'stand':
+    case 'unsneak':
+      state.isSneaking = false;
       bot.setControlState('sneak', false);
+      break;
+    case 'follow':
       startFollow(bot, username, 2);
       break;
     case 'stay':
@@ -23,6 +34,7 @@ function dispatchAction(bot, action, username) {
       setBehavior(bot, 'idle', username);
       break;
     case 'sit':
+      state.isSneaking = true;
       setBehavior(bot, 'sit', username);
       bot.setControlState('sneak', true);
       break;
@@ -74,6 +86,10 @@ function dispatchAction(bot, action, username) {
     case 'attack':
       startAttack(bot, username);
       break;
+    case 'guard':
+      skillEngine.runSkill(bot, 'guard')
+        .catch(e => bot.chat(`Guard error: ${e.message}`));
+      break;
     case 'defensive':
       setBehavior(bot, 'defensive', username);
       break;
@@ -113,13 +129,16 @@ function dispatchAction(bot, action, username) {
       break;
     case 'jump':
       bot.setControlState('jump', true);
-      setTimeout(() => bot.setControlState('jump', false), 250);
+      setTimeout(() => {
+        bot.setControlState('jump', false);
+        if (state.isSneaking) bot.setControlState('sneak', true);
+      }, 250);
       break;
     case 'ensure_tools':
       ensureTools(bot).catch(err => console.error('[CRAFT] ensureTools error:', err.message));
       break;
     default:
-      console.warn(`[NILO] Unknown LLM action: ${action}`);
+      break;
   }
 }
 

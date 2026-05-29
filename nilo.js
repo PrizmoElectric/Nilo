@@ -15,7 +15,10 @@ const autoEat         = require('mineflayer-auto-eat').loader;
 const pvp             = require('mineflayer-pvp').plugin;
 const minecraftHawkEye = require('minecrafthawkeye').default;
 const skillEngine = require('./skill-engine');
-const { installRegistryPatch, setManualOverride } = require('./registry-patch');
+const { installRegistryPatch, installBlockUpdateLearner, installProximityLearner, setManualOverride,
+        buildEarlyRegistrationResponse, handleLoginRegistrySync, REGISTRY_SYNC_CHANNELS } = require('./registry-patch');
+const { installContextModLearner } = require('./context-mod-client');
+const { installViewers } = require('./viewer');
 
 const state   = require('./state');
 const { BOT_USERNAME, MASTER, getServerConfig, setActiveServer, loadServers,
@@ -74,16 +77,29 @@ function createBot() {
     let responseData = null;
 
     if (packet.channel === 'fabric-networking-api-v1:early_registration') {
-      // Respond with an empty channel list (VarInt 0). Echoing the server's list
-      // back claims we support all its Fabric channels, which triggers extra
-      // verification that Nilo can't pass on stricter servers.
-      responseData = Buffer.from([0x00]);
+      // Respond claiming only registry-sync channels — nothing else, to avoid
+      // triggering server-side verification Nilo can't pass.
+      responseData = buildEarlyRegistrationResponse(packet.data ?? Buffer.alloc(1));
+    } else if (REGISTRY_SYNC_CHANNELS.some(ch => ch === packet.channel)) {
+      // Server is delivering the modded block/item registry during login phase.
+      handleLoginRegistrySync(packet.data ?? Buffer.alloc(0));
+      responseData = Buffer.from([0x01]); // acknowledge
     } else if (packet.channel === 'owo:handshake') {
       // oωo response: empty channel map (0x00) + version/compat byte (0x01)
       responseData = Buffer.from([0x00, 0x01]);
+    } else if (packet.channel === 'forgeconfigapiport:sync_configs') {
+      // ConfigSync.onSyncConfigs reads a String from the response — empty string = VarInt(0).
+      responseData = Buffer.from([0x00]);
     } else if (packet.channel.startsWith('forgeconfigapiport:')) {
-      // forgeconfigapiport sends config blobs; just acknowledge with empty bytes.
-      responseData = Buffer.alloc(0);
+      responseData = Buffer.from([0x00]);
+    } else if (packet.channel === 'fabric:custom_ingredient_sync') {
+      // decodeResponsePacket reads: VarInt(protocolVersion) + VarInt(ingredientCount)
+      // 0x01 = accept protocol version 1 (matches server), 0x00 = 0 custom ingredients.
+      responseData = Buffer.from([0x01, 0x00]);
+    } else if (packet.channel.startsWith('fabric:')) {
+      // Other unknown Fabric channels: VarInt(0) is a safe default — better than
+      // empty bytes, which crash mods that call readVarInt() without null-checking.
+      responseData = Buffer.from([0x00]);
     }
     // All other channels: null = "not supported by this client"
 
@@ -99,6 +115,25 @@ function createBot() {
     const sc = getServerConfig();
     console.log(`[NILO] Connected to ${sc.host}:${sc.port} (${sc.version}) as ${BOT_USERNAME}`);
     state.activeBotRef = bot;
+
+    // Forward Nilo's chat to any open CLI sessions.
+    const _chat = bot.chat.bind(bot);
+    bot.chat = (msg) => {
+      _chat(msg);
+      const payload = JSON.stringify({ type: 'nilo', text: String(msg) });
+      for (const ws of state.cliClients) {
+        if (ws.readyState === 1) ws.send(payload);
+      }
+    };
+
+    // Keep sneak active across pathfinder resets — the pathfinder calls
+    // clearControlStates internally on every path recalculation, which would
+    // otherwise wipe the sneak state immediately after it's set.
+    const _clearControlStates = bot.clearControlStates.bind(bot);
+    bot.clearControlStates = function () {
+      _clearControlStates();
+      if (state.isSneaking) bot.setControlState('sneak', true);
+    };
 
     // Patch server-specific block behaviours (floor tiles, etc.) once.
     applyServerBlockOverrides(bot);
@@ -122,12 +157,26 @@ function createBot() {
     // Proactive door opener — bypasses the Fabric-broken executor door logic.
     installDoorOpener(bot);
 
+    // Learn modded block stateIds from any block change in the world.
+    installBlockUpdateLearner(bot);
+
+    // Sample nearby stateIds while moving to feed gap-analysis over time.
+    installProximityLearner(bot, state);
+
+    // Query the server-side Fabric mod for ground-truth block names.
+    // Compares against gap-analysis results and logs mismatches for diagnostics.
+    installContextModLearner(bot);
+
+    // Browser views — started after spawn so the bot inventory is ready.
+    bot.once('spawn', () => {
+      installViewers(bot).catch(err => console.error('[VIEWER] Error:', err.message));
+    });
+
     // ── Path failure recovery ─────────────────────────────────────────────
     let stuckStreak  = 0;
     let lastStuckPos = null;
 
     bot.on('path_reset', (reason) => {
-      console.log(`[NILO] path_reset: ${reason}`);
       if (reason !== 'stuck') return;
 
       const pos = bot.entity.position;
@@ -143,7 +192,7 @@ function createBot() {
         stuckStreak  = 0;
         lastStuckPos = null;
         bot.pathfinder.stop();
-        if (state.behaviorMode === 'idle' || state.behaviorMode === 'wander') {
+        if (!state.isMining && !state.isLooting && (state.behaviorMode === 'idle' || state.behaviorMode === 'wander')) {
           const p  = bot.entity.position;
           const rx = p.x + (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 15);
           const rz = p.z + (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 15);
@@ -162,7 +211,7 @@ function createBot() {
       stuckStreak  = 0;
       lastStuckPos = null;
 
-      if (state.behaviorMode === 'idle' || state.behaviorMode === 'wander') {
+      if (!state.isMining && !state.isLooting && (state.behaviorMode === 'idle' || state.behaviorMode === 'wander')) {
         const p  = bot.entity.position;
         const rx = p.x + (Math.random() * 30 - 15);
         const rz = p.z + (Math.random() * 30 - 15);
@@ -225,6 +274,7 @@ function createBot() {
 
   bot.on('chat', async (username, message) => {
     if (username === BOT_USERNAME) return;
+    if (message.startsWith('!') && !message.toLowerCase().startsWith('!nilo')) return;
 
     const lower    = message.toLowerCase();
     const mentioned = lower.includes('nilo') || lower.startsWith('!nilo');
@@ -429,8 +479,8 @@ function createBot() {
       const inv    = getInventorySummary(bot);
       const held   = bot.heldItem ? bot.heldItem.name : 'nothing';
       const lang   = detectLanguage(cleaned);
-      const actionHint = `[Available actions — if the message implies one, append [ACTION: name] at the very end of your reply: follow, stay, sit, stop, come, closer, unstuck, dance, fish, stop_fish, bow, shoot_target, tunnel, build_house, sleep, wander, attack, defensive, passive, explore, stop_explore, collect_grave, wave, spin, jump, ensure_tools]`;
-      const ctx  = `${sessionHintFor(username)}${username} says: ${cleaned}\n[My inventory: ${inv}. Holding: ${held}. Respond in: ${lang}]\n${actionHint}`;
+      const actionHint = `[Available actions — if the message implies one, append [ACTION: name] at the very end of your reply: follow, stay, sit, stop, come, closer, unstuck, dance, fish, stop_fish, bow, shoot_target, tunnel, build_house, sleep, wander, attack, guard, defensive, passive, explore, stop_explore, collect_grave, wave, spin, jump, ensure_tools, sneak, stand]`;
+      const ctx  = `${sessionHintFor(username)}${username} says: ${cleaned}\n[My inventory: ${inv}. Holding: ${held}. Respond in: ${lang}]\n[Tone: reply in 1 short casual sentence, like a real person talking — no narration, no explaining what you're doing, never mention the modpack or server name]\n${actionHint}`;
       const raw  = await queryLetta(ctx);
       const { text, action } = parseAction(raw);
       console.log(`[NILO] -> ${text}${action ? ` [ACTION: ${action}]` : ''}`);
@@ -447,9 +497,10 @@ function createBot() {
 
   bot.on('death', () => {
     console.log('[NILO] Died. Respawning...');
-    state.isFarming  = false;
-    state.isLooting  = false;
-    state.justDied   = true;
+    state.isFarming    = false;
+    state.isLooting    = false;
+    state.justDied     = true;
+    state.deathPosition = bot.entity.position.clone();
     clearBehavior(bot);
     state.behaviorMode = 'idle';
     setManualOverride(bot, 588209, 'yigd:grave');
@@ -495,6 +546,8 @@ function createBot() {
   bot.on('end', () => {
     state.activeBotRef = null;
     state.isFarming    = false;
+    state.isMining     = false;
+    state.isSneaking   = false;
     if (state.behaviorInterval)  { clearInterval(state.behaviorInterval);  state.behaviorInterval  = null; }
     if (state.proximityInterval) { clearInterval(state.proximityInterval); state.proximityInterval = null; }
     if (state.autonomousInterval){ clearInterval(state.autonomousInterval);state.autonomousInterval = null; }
@@ -529,6 +582,45 @@ if (serverArgIdx !== -1) {
 
 watchLog();
 startDiscord();   // Discord up immediately — works even before Minecraft connects
+
+// ── Local CLI session (WebSocket) ─────────────────────────────────────────────
+// Clients connect on ws://localhost:4000.
+// They send plain-text commands; Nilo's chat replies are forwarded back.
+// Run: node /home/prizmo/nilo-project/nilo/nilo-cli.js  (or just type "nilo")
+{
+  const { WebSocketServer } = require('ws');
+  const CLI_PORT = parseInt(process.env.CLI_PORT || '4000', 10);
+  const cliClients = new Set();
+
+  const wss = new WebSocketServer({ host: '127.0.0.1', port: CLI_PORT });
+
+  // Expose so the bot login handler can patch bot.chat
+  state.cliClients = cliClients;
+
+  wss.on('connection', ws => {
+    cliClients.add(ws);
+    const bot = state.activeBotRef;
+    const status = bot ? `connected to ${getServerConfig().host}` : 'bot offline';
+    ws.send(JSON.stringify({ type: 'status', text: status }));
+
+    ws.on('message', async data => {
+      const message = data.toString().trim();
+      if (!message) return;
+      const bot = state.activeBotRef;
+      if (!bot) { ws.send(JSON.stringify({ type: 'error', text: 'Bot not connected.' })); return; }
+      try {
+        await handleNaturalCommand(bot, message.toLowerCase(), message, MASTER);
+      } catch (err) {
+        ws.send(JSON.stringify({ type: 'error', text: err.message }));
+      }
+    });
+
+    ws.on('close', () => cliClients.delete(ws));
+  });
+
+  console.log(`[CLI] Chat session → type "nilo" in terminal`);
+}
+
 createBot();
 
 process.on('SIGTERM', async () => {

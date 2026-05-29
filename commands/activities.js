@@ -1,6 +1,10 @@
 const { collectGrave, startFishing, runFarm, buildSimpleHouse, startDance, sleepInBed, writeSign } = require('../activities');
 const { startTunnel } = require('../skills/tunnel');
 const { cmd } = require('./_util');
+const { goals: { GoalNear } } = require('mineflayer-pathfinder');
+const { createMovements } = require('../movement');
+const { getPlayerGazeTarget } = require('../gaze');
+const state = require('../state');
 
 const IS_TUNNEL = cmd([
   /\btunnel\b/, /\bdig (a |the )?(tunnel|forward|ahead)\b/, /\bmine forward\b/,
@@ -36,6 +40,32 @@ const IS_WRITE_SIGN = cmd([
 ]);
 
 async function handle(bot, lower, raw) {
+  // Mine/dig what MASTER is looking at — "mine this", "dig that", "mine it"
+  if (/\b(mine|dig|break)\s+(this|that|it)(\s+block)?\b/.test(lower)) {
+    const { block } = getPlayerGazeTarget(bot, 8);
+    if (!block?.position) { bot.chat("I don't see anything to mine."); return true; }
+    const p = block.position;
+    const movements = createMovements(bot);
+    bot.pathfinder.setMovements(movements);
+    state.isMining = true;
+    try {
+      await bot.pathfinder.goto(new GoalNear(p.x, p.y, p.z, 3));
+      const freshBlock = bot.blockAt(p);
+      if (!freshBlock || freshBlock.name === 'air') { bot.chat('Block is gone.'); return true; }
+      if (bot.tool?.equipForBlock) {
+        try { await bot.tool.equipForBlock(freshBlock); } catch (_) {}
+      }
+      await bot.dig(freshBlock, true);
+      bot.chat(`Mined ${freshBlock.name}.`);
+    } catch (err) {
+      console.error(`[NILO] Mine gaze failed (${block.name}): ${err.message}`);
+      bot.chat("Couldn't mine that.");
+    } finally {
+      state.isMining = false;
+    }
+    return true;
+  }
+
   if (IS_TUNNEL(lower)) {
     const lenMatch = lower.match(/(\d+)/);
     const length   = lenMatch ? Math.min(parseInt(lenMatch[1]), 512) : 32;

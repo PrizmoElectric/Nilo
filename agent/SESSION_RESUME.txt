@@ -1,22 +1,77 @@
-SESSION RESUME — 2026-05-04 (end of session)
-============================================
+SESSION RESUME — 2026-05-29 (session 8, end)
+=============================================
 Pending items: agent/CHECKLIST.txt
 Full architecture: agent/map.txt
 Detailed history: agent/CHANGELOG.txt
 
 ── OBJECTIVE FOR NEXT SESSION ────────────────────────────────────────────────
 
-  NILO V2 — Python rewrite, learning-focused.
-  User is learning to code. Guide, don't replace.
-  Ask what they understand first. Point toward answers, don't give them.
+  NILO V1 — Node.js bot, no learning-mode constraints. Just implement.
+  (Nilo v2 Python rewrite is a separate parallel project, still pending.)
+  Zote is a separate Python bot by the same user — see /home/prizmo/zote.
 
-── LAST SESSION (2026-05-04) ─────────────────────────────────────────────────
+── LAST SESSION (2026-05-28–29, session 8) ───────────────────────────────────
 
-  Feature + debug session on Nilo v1. See CHANGELOG.txt for full list.
-  Key: blockresolver, easyauth, multi-server switching, block physics teaching,
-  chatLong, Fabric handshake fix (early_registration → empty list), kick logging.
-  Boot test: passed.
+  Block learning, CLI session, bug fixes, status/stats commands.
+
+  Auto-mapper reconnect fix (registry-patch.js):
+  - Root bug: vanillaMax recomputed from already-patched registry on reconnect
+    (Node module cache shares registry object). Gave 616281 instead of 24134,
+    excluding all modded stateIds from gap analysis forever.
+  - Fix 1: `if (!vanillaMax)` guard — computed only once at first clean spawn.
+  - Fix 2: removed `!bot.registry.blocksByStateId[id]` from resolveMapping
+    filter — was silently excluding all already-patched IDs on reconnect.
+  - Confirmed working: all reconnects now show vanillaMax=24134 in registry.log.
+
+  Ground-truth block learning (context-mod-client.js, new):
+  - Zote's server-side Fabric mod extended: GET /blocknames?sids=n1,n2,...
+    returns {"stateId":"blockName"} using Block.STATE_IDS + Registries.BLOCK.
+  - context-mod-client.js polls every 15s, batches 200 sids per request.
+  - applyGroundTruth() in registry-patch: 'ground_truth' confidence, logs
+    every mismatch with gap analysis. Confirmed: 1000-1077 corrections/session.
+  - Fabric mod rebuilt as v1.1.0 and deployed to server mods folder.
+
+  Terminal CLI session (nilo-cli.js):
+  - WebSocket server (ws://localhost:4000) in nilo.js replaces old HTTP API.
+  - bot.chat() monkey-patched on login to forward replies to CLI clients.
+  - /home/prizmo/.local/bin/nilo — interactive chat REPL with colored output,
+    auto-reconnects after Nilo restart (retries every 3s).
+
+  New commands (commands/misc.js):
+  - "this is <mod:name>": sets manual override for gaze-target stateId.
+  - "status": pings Letta, context mod, viewers, reports mapper stats,
+    behavior, position, server. All checks run in parallel.
+  - "stats": health as X%  (current/max, real max from generic.max_health
+    attribute — correct for modpack-expanded health pools), hunger %,
+    armor defense points (from generic.armor attribute), XP level.
+  - "restart" → "Restarting..." / "reboot" → "Rebooting..." (distinct msgs).
+
+  Navigation (commands/navigation.js):
+  - "tp <p1> to <p2>": general handler. Resolves "me"→MASTER, "you"→NILO.
+    Placed before IS_TP_TO_ME to prevent "tp me to Zote" misfiring.
+
+  Follow behavior (movement.js):
+  - >100 blocks from master while following → teleports instead of pathfinding.
+  - Door spam fix: 2-block tall doors shared one cooldown via base-y key
+    (x, floor(y/2), z). Old per-block 0.8s cooldown caused infinite loop
+    alternating between upper and lower halves. Now 3s shared cooldown.
+
+  Chat filter (nilo.js):
+  - Messages starting with "!" (not "!nilo") silently dropped.
+
+  Browser views (viewer.js):
+  - prismarine-viewer: 3D world view → http://localhost:3007
+  - mineflayer-web-inventory: inventory → http://localhost:3000
+  - World viewer now closes old instance before restart (port release + 300ms
+    wait). Inventory viewer auto-stops on bot.end. Both restart cleanly.
+  - Accessible via Tailscale IP directly (servers bind 0.0.0.0).
+
+── PREVIOUS SESSION (2026-05-25, session 7) ──────────────────────────────────
+
+  Planning session — mirror feature design.
+  Decision: server-side Fabric mod intercepts C2S packets, forwards to Nilo
+  via WebSocket. NOT YET IMPLEMENTED — in CHECKLIST.txt.
 
 ── DEFERRED ──────────────────────────────────────────────────────────────────
 
-  See CHECKLIST.txt → NEEDS LIVE TEST.
+  See CHECKLIST.txt → NEEDS LIVE TEST and KNOWN GAPS.
