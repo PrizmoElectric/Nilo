@@ -11,7 +11,7 @@ const WebSocket  = require('ws');
 const path       = require('path');
 
 const CHROME = '/home/prizmo/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome';
-const SOURCE_URL = 'http://localhost:3007/';
+const SOURCE_URL = 'http://localhost:3009/'; // first-person viewer (internal)
 const WIDTH  = 854;
 const HEIGHT = 480;
 const FPS_MS = 333; // ~3 fps
