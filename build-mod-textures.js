@@ -493,6 +493,18 @@ async function main() {
   // Deploy
   fs.copyFileSync(outJson, path.join(PUBLIC, 'blocksStates/1.20.1.json'));
   fs.copyFileSync(outPng,  path.join(PUBLIC, 'textures/1.20.1.png'));
+
+  // Mobile atlas: 2048×2048 half-resolution (fits GPU memory on mid-range phones)
+  const mobileCanvas = createCanvas(2048, 2048);
+  const mobileCtx = mobileCanvas.getContext('2d');
+  mobileCtx.imageSmoothingEnabled = false;
+  mobileCtx.drawImage(canvas, 0, 0, ATLAS_SZ, ATLAS_SZ, 0, 0, 2048, 2048);
+  const mobileBuf = mobileCanvas.toBuffer('image/png');
+  const mobileOutPng = path.join(OUT_DIR, 'prominence-atlas-mobile.png');
+  fs.writeFileSync(mobileOutPng, mobileBuf);
+  console.log(`Wrote ${mobileOutPng} (${(mobileBuf.length / 1024).toFixed(0)} KB)`);
+  fs.copyFileSync(mobileOutPng, path.join(PUBLIC, 'textures/1.20.1-mobile.png'));
+
   console.log('Deployed. Hard-refresh the viewer.');
 }
 
