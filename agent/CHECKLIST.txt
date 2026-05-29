@@ -110,9 +110,31 @@ FEATURES TO BUILD
 
 ── Browser views ────────────────────────────────────────────────────────────
 
-[ ] Better prismarine viewer — current 3D view uses default prismarine-viewer
-    which doesn't know modded block textures and shows wrong/missing visuals.
-    Goal: Nilo's vision should show what he actually sees, modded blocks included.
+[x] Better prismarine viewer — PHASE 1 COMPLETE (session 9).
+    All blocks now render with correct textures / colors.
+    Approach taken:
+    - /all-blocks endpoint (ContextMod.java) returns full 618k stateId→name map.
+    - build-viewer-assets.js generates 3 files from live server:
+        prominence-registry.json  — stateId array (index=sid, value=blockName)
+        prominence-blockstates.json — 18k-entry baked model JSON for viewer
+        prominence-atlas.png      — 4096×4096 atlas (vanilla tiles + colored modded tiles)
+    - prismarine-viewer source patched + webpack rebuilt:
+        world.js        → setCustomRegistry() overrides block.name per stateId
+        worker.js       → handles 'customRegistry' message
+        worldrenderer.js → setCustomRegistry() fans out to workers + marks sections dirty
+        viewer.js       → listens for 'customRegistry' socket event
+        lib/index.js    → fetches prominence-registry.json at connect time and applies it
+        lib/mineflayer.js → customRegistryProvider option (used for session-learned modded blocks)
+    Result: vanilla blocks = real textures, modded blocks = hash-colored solid cubes.
+
+[x] Prismarine viewer — PHASE 2 COMPLETE (session 9).
+    5,019 modded blocks now render with real textures from mod JARs.
+    12,418 still use colored cube fallback (mods whose JARs weren't found or
+    whose blockstate/model chains couldn't be fully resolved).
+    Script: build-mod-textures.js (offline-capable via all-blocks-cache.json).
+    Outputs: prominence-atlas.png (3118 KB), prominence-blockstates.json.
+    NEXT (optional phase 3): investigate why 15 mods had no extractable JAR
+    assets and fix unresolved model chains to push real-texture count higher.
 
 ────────────────────────────────────────────────────────
 KNOWN GAPS

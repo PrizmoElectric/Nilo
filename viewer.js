@@ -22,7 +22,17 @@ async function installViewers(bot) {
 
   try {
     const { mineflayer: prismarineViewer } = require('prismarine-viewer');
-    prismarineViewer(bot, { port: WORLD_PORT, firstPerson: false });
+    const { getResolved } = require('./registry-patch');
+    prismarineViewer(bot, {
+      port: WORLD_PORT,
+      firstPerson: false,
+      customRegistryProvider: () => {
+        const resolved = getResolved();
+        const out = {};
+        for (const [id, info] of Object.entries(resolved)) out[id] = info.name;
+        return out;
+      },
+    });
     closeWorldViewer = () => bot.viewer?.close();
     console.log(`[VIEWER] 3D world view → http://localhost:${WORLD_PORT}`);
   } catch (err) {

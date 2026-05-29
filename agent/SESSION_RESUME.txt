@@ -1,4 +1,4 @@
-SESSION RESUME — 2026-05-29 (session 8, end)
+SESSION RESUME — 2026-05-29 (session 9, in progress)
 =============================================
 Pending items: agent/CHECKLIST.txt
 Full architecture: agent/map.txt
@@ -10,7 +10,42 @@ Detailed history: agent/CHANGELOG.txt
   (Nilo v2 Python rewrite is a separate parallel project, still pending.)
   Zote is a separate Python bot by the same user — see /home/prizmo/zote.
 
-── LAST SESSION (2026-05-28–29, session 8) ───────────────────────────────────
+── CURRENT SESSION (2026-05-29, session 9) ───────────────────────────────────
+
+  Prismarine viewer rebuild — PHASE 1 COMPLETE.
+
+  All blocks now render correctly in the browser viewer:
+  - Vanilla blocks: real textures (correct stateId mapping via prominence-registry.json)
+  - Modded blocks: hash-colored solid cubes (phase 1 placeholder)
+
+  Key files created/modified:
+  - build-viewer-assets.js    — run once (server online) to regenerate all assets
+  - nilo-assets/prominence-registry.json   — 618k stateId→name array (~19MB, ~2MB gzipped)
+  - nilo-assets/prominence-blockstates.json — baked model JSON for prismarine-viewer
+  - nilo-assets/prominence-atlas.png        — 4096×4096 texture atlas
+  - node_modules/prismarine-viewer/…        — patched source + webpack rebuild needed:
+      lib/world.js, lib/worker.js, lib/worldrenderer.js, lib/viewer.js,
+      lib/index.js, lib/mineflayer.js
+
+  Root causes fixed:
+  1. Vanilla stateId shift: 22,117 vanilla stateIds differed from mcData because
+     mods add extra properties (waterlogging, etc.) to early vanilla blocks.
+     Fixed by serving prominence-registry.json (from /all-blocks) to the browser.
+  2. Modded blocks missing: 17,437 unique modded block names now have blockStates
+     entries + atlas tiles.
+
+  PHASE 2 COMPLETE (same session):
+  - build-mod-textures.js extracts assets from 95/110 mod JARs (456 total,
+    15 mods had no extractable blockstate assets).
+  - 5,019 modded blocks now render with real baked textures.
+  - 12,418 still use colored cube fallback (missing JAR or unresolved model chain).
+  - Script is offline-capable: caches /all-blocks → nilo-assets/all-blocks-cache.json.
+  - Outputs deployed to prismarine-viewer/public/ automatically on each run.
+
+  NEXT (optional phase 3): investigate missing 15 mod JARs and fix unresolved
+  model chains to push real-texture coverage higher.
+
+── PREVIOUS SESSION (2026-05-28–29, session 8) ───────────────────────────────
 
   Block learning, CLI session, bug fixes, status/stats commands.
 
