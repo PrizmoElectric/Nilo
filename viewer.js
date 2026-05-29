@@ -37,8 +37,8 @@ async function installViewers(bot) {
     const closeDesktop = bot.viewer.close.bind(bot.viewer);
     console.log(`[VIEWER] 3D world view (desktop) → http://localhost:${WORLD_PORT}`);
 
-    // Mobile viewer — 2048×2048 atlas (browser selects via port 3006 detection)
-    prismarineViewer(bot, { port: MOBILE_PORT, firstPerson: false, customRegistryProvider: registryProvider });
+    // Mobile viewer — first person, 3-chunk radius (~48 blocks), 2048 atlas
+    prismarineViewer(bot, { port: MOBILE_PORT, firstPerson: true, viewDistance: 3, customRegistryProvider: registryProvider });
     const closeMobile = bot.viewer.close.bind(bot.viewer);
     console.log(`[VIEWER] 3D world view (mobile)  → http://localhost:${MOBILE_PORT}`);
 
