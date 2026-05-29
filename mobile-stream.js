@@ -72,16 +72,15 @@ const clients = new Set();
 async function startBrowser() {
   browser = await puppeteer.launch({
     executablePath: CHROME,
-    headless: true,
+    headless: 'new',  // new headless mode — supports WebGL via ANGLE/SwiftShader
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      // WebGL via SwiftShader (software renderer — works headless, no physical GPU needed)
-      '--use-gl=swiftshader',
+      '--use-angle=swiftshader',   // software WebGL that works in new headless mode
       '--enable-webgl',
       '--ignore-gpu-blocklist',
-      '--enable-gpu-rasterization',
+      '--disable-software-rasterizer',
       '--window-size=' + WIDTH + ',' + HEIGHT,
     ],
   });
@@ -89,7 +88,7 @@ async function startBrowser() {
   await page.setViewport({ width: WIDTH, height: HEIGHT });
   await page.goto(SOURCE_URL, { waitUntil: 'networkidle0', timeout: 30000 });
   // Wait for chunks to stream in and WebGL scene to render
-  await new Promise(r => setTimeout(r, 8000));
+  await new Promise(r => setTimeout(r, 10000));
   console.log('[STREAM] Headless Chrome opened', SOURCE_URL);
 }
 
