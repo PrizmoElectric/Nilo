@@ -386,24 +386,30 @@ function bakeEntry(blockstateDef, allModels, texSlots, blockName) {
   return out;
 }
 
-// ── Step 7: fallback solid-cube entry ──────────────────────────────────────
+// ── Step 7: fallback solid-cube helpers ────────────────────────────────────
 
-function solidCubeEntry(u, v) {
+function solidCubeModel(u, v) {
   const tex = { u, v, su: UV_SZ, sv: UV_SZ };
   const face = dir => ({ texture: { ...tex }, cullface: dir });
   return {
-    variants: {
-      '': [{ model: {
-        textures: { particle: tex, all: tex },
-        elements: [{
-          from: [0,0,0], to: [16,16,16],
-          faces: { up: face('up'), down: face('down'), north: face('north'), south: face('south'), east: face('east'), west: face('west') },
-          ao: true,
-        }],
-        ao: true,
-      }}],
-    },
+    textures: { particle: tex, all: tex },
+    elements: [{
+      from: [0,0,0], to: [16,16,16],
+      faces: { up: face('up'), down: face('down'), north: face('north'), south: face('south'), east: face('east'), west: face('west') },
+      ao: true,
+    }],
+    ao: true,
   };
+}
+
+// Build a fallback entry that covers every variant key in the original blockstate def.
+// Using "" alone only matches blocks with no state properties — doors, stairs etc.
+// need exact keys like "facing=north,open=false" or they render invisible.
+function solidCubeEntry(u, v, bsDef) {
+  const model = solidCubeModel(u, v);
+  const variantKeys = bsDef?.variants ? Object.keys(bsDef.variants) : [''];
+  if (variantKeys.length === 0) variantKeys.push('');
+  return { variants: Object.fromEntries(variantKeys.map(k => [k, [{ model }]])) };
 }
 
 // ── main ───────────────────────────────────────────────────────────────────
@@ -482,9 +488,10 @@ async function main() {
     const bsFile = path.join(EXTRACT, 'assets', modid, 'blockstates', `${localName}.json`);
 
     let entry = null;
+    let bsDef = null;
     if (fs.existsSync(bsFile)) {
       try {
-        const bsDef = JSON.parse(fs.readFileSync(bsFile, 'utf8'));
+        bsDef = JSON.parse(fs.readFileSync(bsFile, 'utf8'));
         entry = bakeEntry(bsDef, allModels, texSlots, blockName);
       } catch {}
     }
@@ -493,9 +500,10 @@ async function main() {
       bakedCount++;
     } else {
       fallbackCount++;
-      // Draw colored tile in the next available slot (AFTER all real textures)
       const fb = drawFallbackTile(ctx, fallbackSlotIdx, blockName);
-      entry = solidCubeEntry(fb.u, fb.v);
+      // Pass bsDef so every variant key (facing=north, open=false, …) maps to
+      // the colored cube — without this, state-ful blocks render invisible.
+      entry = solidCubeEntry(fb.u, fb.v, bsDef);
       fallbackSlotIdx++;
     }
     blockStates[blockName] = entry;
