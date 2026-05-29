@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@puppeteer/browsers": "^3.0.4",
     "better-sqlite3": "^12.9.0",
     "canvas": "^3.2.3",
     "discord.js": "^14.26.3",
@@ -26,6 +27,7 @@
     "mineflayer-tool": "^1.2.0",
     "mineflayer-web-inventory": "^1.8.5",
     "node-fetch": "^3.3.2",
-    "prismarine-viewer": "^1.33.0"
+    "prismarine-viewer": "^1.33.0",
+    "puppeteer-core": "^25.1.0"
   }
 }

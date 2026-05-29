@@ -1,50 +1,58 @@
 // viewer.js — browser views for Nilo
 // prismarine-viewer (desktop): 3D world view     → http://localhost:3007
-// prismarine-viewer (mobile) : 3D world view     → http://localhost:3006  (2048 atlas)
+// mobile-stream               : screenshot stream → http://localhost:3006
+//   Puppeteer renders 3007 headlessly, streams JPEG frames via WebSocket.
+//   Phone just displays an image — zero WebGL on device.
 // mineflayer-web-inventory   : inventory         → http://localhost:3000
 //
-// Called on every spawn. World viewers are closed and restarted with the new bot
+// Called on every spawn. World viewer is closed and restarted with the new bot
 // each time (prismarine-viewer binds to a specific bot instance and has no
-// reconnect support). Inventory viewer auto-stops on bot.end so just restart it.
+// reconnect support). The stream server starts once and keeps running.
 
 const WORLD_PORT     = parseInt(process.env.VIEWER_PORT        || '3007', 10);
 const MOBILE_PORT    = parseInt(process.env.VIEWER_MOBILE_PORT || '3006', 10);
 const INVENTORY_PORT = parseInt(process.env.INVENTORY_PORT     || '3000', 10);
 
-let closeWorldViewer = null; // stored close fn from previous spawn
+let closeWorldViewer = null;
+let streamStarted    = false;
 
 async function installViewers(bot) {
-  // ── 3D world viewers ──────────────────────────────────────────────────────
-  // Close previous instances first to free the ports, then start fresh.
+  // ── Desktop 3D world viewer ───────────────────────────────────────────────
   if (closeWorldViewer) {
     try { closeWorldViewer(); } catch (_) {}
     closeWorldViewer = null;
-    await new Promise(r => setTimeout(r, 300)); // let ports release
+    await new Promise(r => setTimeout(r, 300));
   }
 
   try {
     const { mineflayer: prismarineViewer } = require('prismarine-viewer');
     const { getResolved } = require('./registry-patch');
-    const registryProvider = () => {
-      const resolved = getResolved();
-      const out = {};
-      for (const [id, info] of Object.entries(resolved)) out[id] = info.name;
-      return out;
-    };
-
-    // Desktop viewer — full 4096×4096 atlas
-    prismarineViewer(bot, { port: WORLD_PORT,  firstPerson: false, customRegistryProvider: registryProvider });
-    const closeDesktop = bot.viewer.close.bind(bot.viewer);
+    prismarineViewer(bot, {
+      port: WORLD_PORT,
+      firstPerson: false,
+      customRegistryProvider: () => {
+        const resolved = getResolved();
+        const out = {};
+        for (const [id, info] of Object.entries(resolved)) out[id] = info.name;
+        return out;
+      },
+    });
+    closeWorldViewer = () => bot.viewer?.close();
     console.log(`[VIEWER] 3D world view (desktop) → http://localhost:${WORLD_PORT}`);
-
-    // Mobile viewer — first person, 3-chunk radius (~48 blocks), 2048 atlas
-    prismarineViewer(bot, { port: MOBILE_PORT, firstPerson: true, viewDistance: 3, customRegistryProvider: registryProvider });
-    const closeMobile = bot.viewer.close.bind(bot.viewer);
-    console.log(`[VIEWER] 3D world view (mobile)  → http://localhost:${MOBILE_PORT}`);
-
-    closeWorldViewer = () => { try { closeDesktop(); } catch (_) {} try { closeMobile(); } catch (_) {} };
   } catch (err) {
     console.error('[VIEWER] World viewer failed:', err.message);
+  }
+
+  // ── Mobile screenshot stream (starts once, keeps running across respawns) ─
+  if (!streamStarted) {
+    streamStarted = true;
+    const { startStream } = require('./mobile-stream');
+    // Give the desktop viewer a moment to finish binding before puppeteer opens it
+    setTimeout(() => {
+      startStream(MOBILE_PORT).catch(err =>
+        console.error('[STREAM] Failed to start:', err.message)
+      );
+    }, 3000);
   }
 
   // ── Inventory viewer ──────────────────────────────────────────────────────
