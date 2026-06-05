@@ -97,6 +97,17 @@ async function _handleDiscordMessage(message) {
   const content  = message.content.trim();
   const lower    = content.toLowerCase();
 
+  // Resolve Discord reply reference — prepend quoted context so Letta sees it
+  let replyContext = '';
+  if (message.reference?.messageId) {
+    try {
+      const ref = await message.channel.messages.fetch(message.reference.messageId);
+      const who  = ref.author.id === discordClient.user.id ? 'Nilo' : ref.author.username;
+      const body = ref.content.replace(/^\*\*NILO:\*\*\s*/i, '').trim().slice(0, 300);
+      replyContext = `[Replying to ${who}: "${body}"]\n`;
+    } catch (_) {}
+  }
+
   // !status — anyone in the channel can check
   if (lower === '!status' || lower === '!nilo status') {
     await toDiscord(buildStatusEmbed(bot));
@@ -126,6 +137,7 @@ async function _handleDiscordMessage(message) {
         '`!trusted` — list trusted players\n' +
         '`!behavior <mode>` / `!behavior clear` — set behavior\n' +
         '`!server list` — show server profiles\n' +
+        '`!server add <name> <host> [port]` — add profile and connect immediately\n' +
         '`!server switch <name>` — switch Minecraft server\n' +
         '`!server save <name>` — save current server as a profile\n' +
         '`!status` / `!skills` — status & skill list\n' +
@@ -237,6 +249,23 @@ async function _handleDiscordMessage(message) {
       await toDiscord(`Saved current server (\`${sc.host}:${sc.port}\`) as **${name}**.`);
       return;
     }
+    if (/^!server\s+add\s+\S+\s+\S+/i.test(lower)) {
+      const m = content.match(/^!server\s+add\s+(\S+)\s+(\S+)(?:\s+(\d+))?/i);
+      if (!m) { await toDiscord('Usage: `!server add <name> <host> [port]`'); return; }
+      const [, name, host, portStr] = m;
+      const port = portStr ? parseInt(portStr) : 25565;
+      const sc   = getServerConfig();
+      addServer(name, { host, port, version: sc.version, auth: sc.auth, description: '' });
+      try {
+        setActiveServer(name);
+        await toDiscord(`Added **${name}** (\`${host}:${port}\`) and connecting...`);
+        if (bot) setTimeout(() => bot.quit('server switch'), 500);
+        else await toDiscord('(Nilo is offline — will connect to **' + name + '** on next start.)');
+      } catch (e) {
+        await toDiscord(`Error: ${e.message}`);
+      }
+      return;
+    }
 
     // ── Behavior ─────────────────────────────────────────────────────────────
     if (/^!behavior\s+clear$/i.test(lower)) {
@@ -287,7 +316,7 @@ async function _handleDiscordMessage(message) {
         const inv  = getInventorySummary(bot);
         const held = bot.heldItem ? bot.heldItem.name : 'nothing';
         const actionHint = `[Available actions — if the message implies one, append [ACTION: name]: follow, stay, sit, stop, come, closer, unstuck, dance, fish, stop_fish, bow, shoot_target, tunnel, build_house, sleep, wander, attack, defensive, passive, explore, stop_explore, collect_grave, wave, spin, jump, ensure_tools]`;
-        ctx = `${sessionHintFor(MASTER)}${MASTER} says (via Discord): ${cleaned}\n[My inventory: ${inv}. Holding: ${held}. Respond in: ${lang}]\n${actionHint}`;
+        ctx = `${sessionHintFor(MASTER)}${replyContext}${MASTER} says (via Discord): ${cleaned}\n[inventory: ${inv}, holding: ${held}]\n${actionHint}`;
 
         const raw = await queryLetta(ctx);
         const { text, action } = parseAction(raw);
@@ -295,7 +324,7 @@ async function _handleDiscordMessage(message) {
         if (text)   bot.chat(text);  // monkey-patch handles Discord, skips in-game (discordContext=true)
         if (action) dispatchAction(bot, action, MASTER);
       } else {
-        ctx = `${sessionHintFor(MASTER)}${MASTER} says (via Discord, while I'm not in Minecraft): ${cleaned}\n[I am currently offline — not connected to any server. Respond in: ${lang}]`;
+        ctx = `${sessionHintFor(MASTER)}${replyContext}${MASTER} says (via Discord): ${cleaned}`;
 
         const raw = await queryLetta(ctx);
         const { text } = parseAction(raw);

@@ -1,0 +1,489 @@
+NILO — MANUAL DE COMANDOS
+=========================
+Todos os comandos são ditos no chat do Minecraft pelo MASTER (PrizmoElectric).
+Variantes em pt-BR e en-US são aceitas. O prefixo "!nilo" é opcional no Discord.
+Última atualização: 2026-06-05
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NAVEGAÇÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+follow / me segue / vem comigo / me acompanha / fica comigo
+  Nilo começa a seguir o MASTER a distância 2.
+
+come here / vem aqui / chega aqui / vem até mim
+  Nilo para o comportamento atual e caminha até o MASTER (dist=2).
+
+closer / fique mais perto / fica mais perto / mais perto
+  Nilo segue o MASTER bem de perto (dist=1).
+
+stay / stop / wait / para / espera / não se mexa / aguarda
+  Nilo para tudo e fica no lugar.
+
+sit / senta
+  Nilo agacha e fica sentado (sneak persistente).
+
+stand up / levanta / para de agachar / fica em pé
+  Nilo levanta e sai do modo sit/sneak.
+
+wander / vagabundeia
+  Nilo caminha aleatoriamente num raio de 10 blocos a cada 5s.
+
+go explore / explora / vai explorar / começa a explorar
+  Habilita exploração autônoma quando ocioso.
+
+stop exploring / para de explorar / fica parado / não explora
+  Desabilita exploração, Nilo fica parado quando ocioso.
+
+unstuck / destravar / sai do caminho / se mexe / move-te
+  Tenta se soltar quando Nilo estiver preso.
+
+go away / vai embora / me deixa / para de me seguir / sai daqui
+  Para de seguir, entra em modo idle.
+
+help / assist / protect me / me ajuda / me protege / me cobre / me escolta
+  Modo de assistência em combate: segue e ataca mobs ao lado do MASTER.
+
+tp me / tp here / tp para mim / vem aqui agora
+  Teleporta Nilo para a posição do MASTER via /tp.
+
+tp me to you / me traz para você / teleporta eu para você
+  Teleporta o MASTER para a posição de Nilo via /tp.
+
+tp <jogador1> to <jogador2>
+  Executa /tp de um jogador para outro. Aceita "me" e "you" como atalhos.
+
+look at me / olha pra mim / me olha
+  Nilo olha para o MASTER uma vez.
+
+look at me for N / olha pra mim por N
+  Nilo fica te olhando por N segundos (loop de 50ms).
+
+look up/down/north/south/east/west
+  Nilo olha na direção indicada. (pt-BR: cima/baixo/norte/sul/leste/oeste)
+
+press button / press this / push lever / aperta / empurra
+  Caminha até o botão/alavanca/placa que o MASTER está olhando e o ativa.
+
+click/press/activate X Y Z
+  Caminha até as coordenadas e ativa o bloco naquela posição.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMBATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+attack / ataca
+  Ataca o mob hostil mais próximo em modo melee contínuo.
+
+guard / sentinela / vigia / combat mode / melee mode / go melee
+  Modo guarda: patrulha o posto e ataca mobs hostis automaticamente.
+
+defensive / defensivo
+  Modo defensivo: só luta se for atacado primeiro.
+
+passive / passivo
+  Modo passivo: não luta sob nenhuma circunstância.
+
+use bow / archer mode / sniper mode / usa o arco / modo arqueiro
+  Modo arqueiro: ataque ranged com kiting e lógica de distância.
+
+shoot that / shoot it / atira nisso / atira nele
+  Dispara uma flecha na direção que o MASTER está olhando.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ATIVIDADES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+mine this / dig that / break this / mine it
+  Minera o bloco que o MASTER está olhando (auto-equipa ferramenta).
+
+tunnel [N] / escava / cava um túnel [N]
+  Escava um túnel de N blocos para frente (padrão: 32, máx: 512).
+
+stop tunnel / para de cavar / cancel digging
+  Interrompe a escavação do túnel em andamento.
+
+fish / pesca / vai pescar / começa a pescar
+  Começa a pescar: lança a linha e recolhe quando fisgar.
+
+stop fishing / para de pescar / stop casting
+  Para de pescar e recolhe a linha.
+
+farm / colhe / vai para a fazenda / farmar
+  Percorre a área de fazenda configurada e colhe plantações maduras.
+
+build shelter / build house / constrói uma casa / constrói um abrigo
+  Constrói uma casa/abrigo simples com os materiais disponíveis.
+
+sleep / dormir / dorme na cama / usa a cama
+  Procura e dorme na cama mais próxima.
+
+dance / dança / mostra seus passos
+  Executa uma animação de dança.
+
+collect my grave / pega seu túmulo / vai pegar seu túmulo / recupera seus itens
+  Vai buscar o túmulo do MASTER após morte e coleta os itens.
+
+write sign: <texto> / leave a note: <texto> / sign says <texto>
+  Coloca uma placa com o texto informado. (pt-BR: escreve no sign: / deixa uma nota:)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FÍSICO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+jump [N] / pula [N]
+  Pula 1 vez ou N vezes (máx: 20).
+
+move forward/back/left/right [Ns]
+  Move nessa direção por N segundos (padrão: 2s, máx: 10s).
+  (pt-BR: anda para frente/trás/esquerda/direita)
+
+sprint [Ns] / corre [Ns]
+  Corre para frente por N segundos (padrão: 3s, máx: 10s).
+
+spin [N] / spin left / spin right / gira / dá uma volta
+  Gira N graus na direção indicada (padrão: 360, máx: 1080).
+
+wave / acena / balança o braço
+  Acena o braço 6 vezes.
+
+crouch / sneak / duck / agacha / abaixa
+  Agacha (sneak persistente, mantém após pathfinding).
+
+stand up / levanta / para de agachar / fica em pé
+  Fica em pé e cancela o sneak.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INVENTÁRIO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+inventory / inventário / what do you have / o que você tem / mostra seus itens
+  Lista todos os itens agrupados por categoria (armas, ferramentas, armadura, comida, blocos).
+
+equip <item> / hold <item> / wield <item> / equipa <item>
+  Equipa o item do inventário que contenha o nome informado.
+
+equip this / equipa isso
+  Pega o item mais próximo no chão e o equipa.
+
+use <item> as weapon / usa <item> como arma
+  Define o item como arma principal para combate.
+
+unequip that / tira isso / desequipa isso
+  Desequipa o item na mão principal.
+
+unequip and give me / tira e me dá
+  Desequipa o item na mão e joga para o MASTER.
+
+give me that / hand it over / me dá isso / me passa isso
+  Joga o item da mão principal para o MASTER.
+
+drop all / drop everything / larga tudo / joga tudo fora
+  Joga todos os itens do inventário no chão.
+
+drop the item in my hand / joga isso fora
+  Joga o item que está na mão no chão.
+
+drop <item> / give <item> / me dá <item>
+  Joga o item específico no chão.
+
+eat this / come isso
+  Coleta o alimento mais próximo e o come.
+
+bring me <item> / get me <item> / fetch <item>
+  Procura nos containers próximos (raio 32) e traz o item para o inventário.
+  Suporta quantidade: "bring me 16 iron_ingot".
+
+open it / open this chest / read chest
+  Abre o container que o MASTER está olhando e lista o conteúdo.
+
+open at X Y Z
+  Vai até as coordenadas e abre o container naquela posição.
+
+open <mod:bloco> / find <mod:bloco>
+  Encontra e abre o bloco modded mais próximo no range do scan.
+  Exemplo: open ae2:terminal | find ae2:drive | open the inscriber
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRAFTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+craft <item> [N] / crafta <item> [N]
+  Crafta N unidades do item na bancada mais próxima.
+
+smelt <item> [N] / fundir <item> [N] / cozinhar <item>
+  Smeltar N unidades do item na fornalha mais próxima.
+
+what can I craft / o que você pode craftar / show craftable
+  Lista tudo que Nilo pode craftar com o inventário atual.
+
+ensure tools / craft tools / faz as ferramentas
+  Verifica e crafta as ferramentas básicas que estejam faltando.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SKILLS (SISTEMA DE APRENDIZADO)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+learn how to <tarefa> / learn to <tarefa> / aprende a <tarefa>
+  Gera e testa uma nova skill JS com IA (até 3 tentativas). Salva em skills/.
+
+do <skill> / run <skill> / executa <skill>
+  Executa uma skill salva pelo nome exato.
+
+list skills / quais skills você sabe / show skills
+  Lista todas as skills aprendidas com nome e descrição.
+
+forget <skill> / unlearn <skill> / apaga skill <skill>
+  Deleta permanentemente uma skill.
+
+queue <tarefa> as a goal / adiciona <tarefa> aos objetivos
+  Adiciona uma tarefa ao currículo autônomo.
+
+autonomous on / ativa modo autônomo / be autonomous
+  Habilita aprendizado autônomo: Nilo aprende skills quando fica ocioso por 10min.
+
+autonomous off / desativa modo autônomo
+  Desabilita o aprendizado autônomo.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONFIANÇA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+trust <jogador> / confia em <jogador>
+  Adiciona um jogador à lista de confiança. Jogadores confiados podem dar
+  comandos básicos de comportamento (!nilo follow/stay/sit/wander/attack/defensive/passive).
+
+untrust <jogador> / para de confiar em <jogador> / distrust <jogador>
+  Remove o jogador da lista de confiança.
+
+who do you trust / quem você confia / lista de confiados
+  Lista todos os jogadores confiados.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGISTRO DE BLOCOS E ENTIDADES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+scan [raio] / escaneia / o que tem ao redor
+  Escaneia todos os blocos num raio (padrão: 16, máx: 64) e exibe os top 10.
+  Salva o resultado completo em scans/scan_<timestamp>_r<raio>.txt.
+
+echo scan [N] / repete scan [N]
+  Reexibe o resultado do scan N (0 = mais recente). Aceita intervalo: echo scan 1-3.
+
+this / what is this / what am I looking at / o que é isso
+  Identifica o bloco ou entidade que o MASTER está olhando.
+  Bloco → nome, posição X Y Z e stateId. Entidade → nome, tipo, hostil/passivo, HP.
+
+this is <mod:nome>
+  Ensina o nome correto (com namespace) do bloco que o MASTER está olhando.
+  Exemplo: this is yigd:grave | this is create:cogwheel
+
+blockmap <stateId> <mod:bloco> / blockname <stateId> <mod:bloco>
+  Mapeia manualmente um stateId para um nome de bloco no banco de dados.
+  Exemplo: blockmap 286849 create_new_age:thorium_ore
+
+id <stateId>
+  Localiza todos os blocos com aquele stateId num raio de 32 blocos e mostra posições.
+
+<bloco> is solid / <bloco> is passable / <bloco> is walkable
+  Ensina a Nilo se o bloco é sólido ou atravessável (afeta o pathfinding).
+  Exemplo: thorium_ore is solid | modded_plant is passable
+
+this is solid / this is passable
+  Ensina a física do bloco que o MASTER está olhando (sem precisar saber o nome).
+
+<bloco_a> is <bloco_b>
+  Remapeia todos os stateIDs do bloco_a para o nome bloco_b.
+  Exemplo: pumpkin_stem is stone_bricks
+
+<entidade> is hostile / <entidade> is not hostile / <entidade> is friendly
+  Ensina Nilo se aquela entidade é hostil ou não. Salvo no banco de dados.
+  Exemplo: zombie_merchant is hostile | forest_spirit is friendly
+
+what do you know about <bloco/entidade>
+  Consulta o banco de dados para o nome informado: hostilidade, física, stateIDs.
+
+rawblock
+  Debug: exibe stateId e nome de cada bloco no ray-cast do gaze do MASTER (até 6 blocos).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SERVIDOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+list servers / servidores
+  Lista todos os perfis em servers.json com host, porta e versão.
+
+current server / servidor atual / which server
+  Mostra o nome e endereço do servidor ativo.
+
+switch server <nome> / vai para o servidor <nome> / conecta no servidor <nome>
+  Troca para o perfil informado e reconecta (~10s). O perfil deve existir em servers.json.
+
+save server as <nome> / salvar servidor como <nome>
+  Salva o servidor atual (host:porta:versão) como um novo perfil em servers.json.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MIRROR (ESPELHO)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+mirror watch / watch mode
+  Modo observador: Nilo te observa e loga eventos sem gravar nem se mover.
+
+mirror me / copy me / imitate me
+  Modo espelho: Nilo te segue (dist=2), replica movimentos e grava em mirrors/<timestamp>.json.
+
+mirror stop / stop mirroring
+  Para o modo espelho e salva a gravação se houver.
+
+mirror list
+  Lista as últimas 8 gravações salvas (arquivos .json em mirrors/).
+
+mirror status
+  Mostra o modo atual (watch/learn), quantidade de eventos gravados e tempo.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INFO E DIAGNÓSTICO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+stats
+  Mostra vida (%), fome (%), armadura e nível de XP de Nilo.
+
+status
+  Diagnóstico completo: posição, modo, mapper, Letta, CtxMod, viewers, Discord, servidor.
+
+say <texto> / fala <texto> / repeat after me: <texto>
+  Nilo diz o texto no chat. Se começar com /, executa como comando.
+
+restart / reiniciar
+  Desconecta e reconecta ao servidor após ~10s.
+
+reboot
+  Igual ao restart.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMANDOS ADMIN (prefixo !nilo obrigatório em jogo)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+!nilo quit
+  Desconecta Nilo do servidor sem reconectar.
+
+!nilo setfarm X1 Y1 Z1 X2 Y2 Z2
+  Define a área de fazenda como um cuboide entre os dois cantos informados.
+
+!nilo setchest X Y Z
+  Define a posição do baú principal para o sistema de fazenda.
+
+!nilo farm
+  Executa a rotina de colheita imediatamente.
+
+!nilo learn <tarefa>
+  Gera uma nova skill (equivalente a "learn how to <tarefa>").
+
+!nilo do <skill>
+  Executa a skill pelo nome.
+
+!nilo skills
+  Lista todas as skills.
+
+!nilo forget <skill>
+  Deleta a skill.
+
+!nilo queue <tarefa>
+  Adiciona ao currículo autônomo.
+
+!nilo autonomous on/off
+  Liga/desliga o modo autônomo.
+
+!nilo trust <jogador> / !nilo untrust <jogador> / !nilo trusted
+  Gerencia a lista de confiança.
+
+!nilo follow / !nilo stay / !nilo sit / !nilo wander
+  Comandos de comportamento via prefixo (para jogadores confiados também).
+
+!nilo attack / !nilo defensive / !nilo passive
+  Comandos de combate via prefixo.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMANDOS EXCLUSIVOS DO DISCORD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+!status
+  Status resumido: posição, vida, fome, modo, skills, autônomo.
+
+!skills
+  Lista as skills aprendidas.
+
+!help
+  Exibe a lista de comandos disponíveis no Discord.
+
+!autonomous on / !autonomous off
+  Liga/desliga o modo autônomo.
+
+!skill list
+  Lista todas as skills.
+
+!skill learn <tarefa>
+  Aprende nova skill via IA (Nilo precisa estar online).
+
+!skill run <nome>
+  Executa skill pelo nome (Nilo precisa estar online).
+
+!skill forget <nome>
+  Deleta uma skill.
+
+!goal <tarefa>
+  Adiciona tarefa ao currículo autônomo.
+
+!trust <jogador> / !untrust <jogador> / !trusted
+  Gerencia a lista de confiança.
+
+!behavior <modo>
+  Define o modo de comportamento: idle, follow, sit, wander, attack, defensive, passive, fishing, bow.
+
+!behavior clear
+  Limpa o comportamento e retorna ao modo idle.
+
+!server list
+  Lista os perfis de servidor em servers.json.
+
+!server add <nome> <host> [porta]
+  Adiciona um novo perfil com o host e porta informados e conecta imediatamente.
+  Porta padrão: 25565. Exemplo: !server add hoskes server.free.hoskes.top 25565
+
+!server switch <nome>
+  Troca para um perfil existente e reconecta.
+
+!server current
+  Mostra o servidor ativo.
+
+!server save <nome>
+  Salva o servidor atual como um novo perfil.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOTAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Tudo que não bater com um comando acima é enviado para o Letta (IA), que responde
+  em linguagem natural e pode acionar ações automaticamente via [ACTION: name].
+
+- Mensagens começando com "!" (exceto "!nilo") são ignoradas silenciosamente.
+
+- Idioma detectado automaticamente: pt-BR ou en por heurística de palavras.
+
+- Jogadores confiados (não MASTER) só têm acesso a: follow, stay, sit, wander,
+  attack, defensive, passive via prefixo !nilo. Não têm acesso à Letta nem a
+  comandos naturais.
