@@ -1,7 +1,7 @@
 // Skill: spin
 // Description: do a full 360-degree spin in place
 // Handcrafted: true
-const { Movements, goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { Movements, goals: { GoalBlock, GoalNear } } = require('../pathfinder-compat');
 const Vec3 = require('vec3');
 
 async function niloSkill(bot) {

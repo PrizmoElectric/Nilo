@@ -1,7 +1,7 @@
 // combat.js — hostile mob detection, weapon helpers, melee and bow combat
 
 const Vec3 = require('vec3');
-const { goals: { GoalNear } } = require('mineflayer-pathfinder');
+const { goals: { GoalNear } } = require('./pathfinder-compat');
 const state  = require('./state');
 const { setBehavior } = require('./behavior');
 const { createMovements } = require('./movement');
@@ -22,6 +22,23 @@ const stmtGetEntity = db.prepare('SELECT is_hostile FROM entities WHERE name = ?
 
 function isHostileMob(entity) {
   if (!entity || entity.type === 'player' || entity.type === 'object') return false;
+
+  // Modded entities have no e.name in mineflayer — resolve via the entity-type
+  // cache (Solsai /all-entities), which carries Mojang's own SpawnGroup as
+  // ground truth. This is checked first because it's authoritative for any mob,
+  // including ones not yet seen/taught.
+  if (!entity.name || entity.name === 'unknown') {
+    const { isModdedEntityHostile, getModdedEntityName } = require('./registry-patch');
+    const moddedName = entity.entityType != null ? getModdedEntityName(entity.entityType) : null;
+    if (moddedName) {
+      // Player-taught DB override still wins over ground truth.
+      const row = stmtGetEntity.get(moddedName.toLowerCase().replace(/^[a-z_]+:/, ''));
+      if (row !== undefined) return !!row.is_hostile;
+      const hostile = entity.entityType != null ? isModdedEntityHostile(entity.entityType) : null;
+      if (hostile !== null) return hostile;
+    }
+  }
+
   const name = (entity.name || '').toLowerCase().replace(/^[a-z_]+:/, '');
   // DB knowledge (player-taught) takes priority over hardcoded list
   const row = stmtGetEntity.get(name);
@@ -40,47 +57,81 @@ const CHARGE_XBOW_MS  = 1250;   // crossbow load time (~25 ticks)
 // ── Weapon / shield helpers ───────────────────────────────────────────────────
 
 function equipBestMeleeWeapon(bot) {
-  const { isWeapon } = require('./items');
+  const { isWeapon, resolveItemName } = require('./items');
   const inv = bot.inventory.items();
 
   // 1. Custom modded weapon set by player command
   if (state.customWeapon) {
-    const custom = inv.find(i => i.name === state.customWeapon);
+    const custom = inv.find(i => resolveItemName(i).includes(state.customWeapon));
     if (custom) { bot.equip(custom, 'hand').catch(() => {}); return; }
   }
 
-  // 2. Vanilla priority list
+  // 2. Vanilla priority list (match against resolved name so modded aliases work too)
   const priority = [
     'netherite_sword','diamond_sword','iron_sword','stone_sword','wooden_sword','golden_sword',
     'netherite_axe','diamond_axe','iron_axe','stone_axe','wooden_axe','golden_axe',
   ];
   for (const name of priority) {
-    const item = inv.find(i => i.name === name);
+    const item = inv.find(i => resolveItemName(i).endsWith(name));
     if (item) { bot.equip(item, 'hand').catch(() => {}); return; }
   }
 
-  // 3. Any modded weapon (isWeapon keyword match)
+  // 3. Any modded weapon (isWeapon keyword match on resolved name)
   const modded = inv.find(i => isWeapon(i));
   if (modded) { bot.equip(modded, 'hand').catch(() => {}); }
 }
 
 // equipBestRanged — returns { item, isCrossbow, speed } or null if no ammo.
-// Prefers crossbow over bow.
 function equipBestRanged(bot) {
+  const { resolveItemName } = require('./items');
   const inv    = bot.inventory.items();
-  const xbow   = inv.find(i => i.name === 'crossbow');
-  const bow    = inv.find(i => i.name === 'bow');
-  const arrows = inv.find(i => i.name.includes('arrow'));
+  const xbow   = inv.find(i => resolveItemName(i).includes('crossbow'));
+  const bow    = inv.find(i => resolveItemName(i).endsWith('bow') && !resolveItemName(i).includes('crossbow'));
+  const arrows = inv.find(i => resolveItemName(i).includes('arrow'));
   if (!arrows) return null;
   if (xbow) return { item: xbow, isCrossbow: true,  speed: BOLT_SPEED      };
   if (bow)  return { item: bow,  isCrossbow: false, speed: BOW_ARROW_SPEED };
   return null;
 }
 
-
 function equipShield(bot) {
-  const shield = bot.inventory.items().find(i => i.name === 'shield');
+  const { resolveItemName } = require('./items');
+  const shield = bot.inventory.items().find(i => resolveItemName(i).includes('shield'));
   if (shield) bot.equip(shield, 'off-hand').catch(() => {});
+}
+
+// equipAllArmor — equips the best available armor from inventory into each slot.
+// Corrects the armor-manager plugin's wrong ranking (it puts chainmail above iron).
+const ARMOR_MATERIAL_RANK = ['leather', 'golden', 'chainmail', 'iron', 'turtle', 'diamond', 'netherite'];
+const ARMOR_SLOTS = { helmet: 'head', chestplate: 'torso', leggings: 'legs', boots: 'feet' };
+// mineflayer player inventory: slot 5=helmet, 6=chestplate, 7=leggings, 8=boots
+const ARMOR_INV_SLOT = { head: 5, torso: 6, legs: 7, feet: 8 };
+
+async function equipAllArmor(bot) {
+  const { resolveItemName } = require('./items');
+  const inv = bot.inventory.items();
+
+  for (const [suffix, slot] of Object.entries(ARMOR_SLOTS)) {
+    const candidates = inv.filter(i => resolveItemName(i).endsWith(`_${suffix}`));
+    if (!candidates.length) continue;
+
+    candidates.sort((a, b) => {
+      const rn = n => ARMOR_MATERIAL_RANK.findIndex(m => resolveItemName(n).startsWith(m));
+      return rn(b) - rn(a); // highest rank first
+    });
+
+    const best = candidates[0];
+    const currentSlot = bot.inventory.slots[ARMOR_INV_SLOT[slot]];
+    const currentRank = currentSlot
+      ? ARMOR_MATERIAL_RANK.findIndex(m => (currentSlot.name || '').startsWith(m))
+      : -1;
+    const bestRank = ARMOR_MATERIAL_RANK.findIndex(m => resolveItemName(best).startsWith(m));
+
+    if (bestRank > currentRank) {
+      try { await bot.equip(best, slot); }
+      catch (err) { console.warn(`[ARMOR] Failed to equip ${resolveItemName(best)}: ${err.message}`); }
+    }
+  }
 }
 
 // ── Combat AI — shared autonomous combat tick ─────────────────────────────────
@@ -94,31 +145,36 @@ function equipShield(bot) {
 // Returns true if a target was found and action taken, false if no target.
 
 const MELEE_RANGE  = 3;
+const SHIELD_RANGE = 8;    // raise shield whenever a hostile is within this distance
 const RANGED_RANGE = 32;
 const KITE_DIST    = 5;    // back off when mob is this close in ranged mode
 const RETREAT_HP   = 4;
-const TOTEM_HP     = 6;
 
 const _cd = {};  // action cooldown timestamps
 function _hasCd(name, ms) { return Date.now() - (_cd[name] || 0) < ms; }
 function _setCd(name)     { _cd[name] = Date.now(); }
 
 async function combatTick(bot, anchorPos) {
-  // ── Passive: equip totem if health low ──────────────────────────────────
-  if (bot.health <= TOTEM_HP && !_hasCd('totem', 15000)) {
-    const totemId = bot.registry.itemsByName.totem_of_undying?.id;
-    if (totemId && bot.inventory.findInventoryItem(totemId, null)) {
-      _setCd('totem');
-      const se = require('./skill-engine');
-      if (se.hasSkill('equip_totem')) se.runSkill(bot, 'equip_totem').catch(() => {});
-    }
-  }
+  // Totem-of-undying is kept equipped proactively at all times by the
+  // mineflayer-totem-auto plugin (nilo.js) — not just during attack/assist
+  // mode. A reactive "equip at low health" check used to live here, but
+  // vanilla only honors a totem that's already in the offhand *before* the
+  // fatal hit lands, so anything gated on bot.health being already low was
+  // too late against any single hit dealing more than a few hearts.
 
   const anchor = anchorPos || bot.entity.position;
-  const target = bot.nearestEntity(e => isHostileMob(e) && e.position.distanceTo(anchor) < 24);
+  const target = bot.nearestEntity(e => isHostileMob(e) && e.position && e.position.distanceTo(anchor) < 24);
   if (!target) return false;
 
   const dist = target.position.distanceTo(bot.entity.position);
+
+  // ── Shield management — raise whenever a hostile is close, keep it up ────
+  // Holding shield in off-hand doesn't prevent main-hand sword attacks.
+  if (dist <= SHIELD_RANGE) {
+    if (!bot._shieldUp) { bot.activateItem(true); bot._shieldUp = true; }
+  } else {
+    if (bot._shieldUp) { bot.deactivateItem(); bot._shieldUp = false; }
+  }
 
   // ── Retreat ──────────────────────────────────────────────────────────────
   if (bot.health <= RETREAT_HP) {
@@ -135,7 +191,10 @@ async function combatTick(bot, anchorPos) {
   // ── Melee ────────────────────────────────────────────────────────────────
   if (dist <= MELEE_RANGE) {
     bot.pathfinder.setGoal(null);
-    if (!_hasCd('melee', 500)) {
+    // Wait for weapon cooldown — bot.quickBarSlot gives current slot, cooldown
+    // is tracked per item type. Use 600ms as a safe floor for swords/axes.
+    const weaponCd = bot.entity.heldItem?.name?.includes('axe') ? 1000 : 620;
+    if (!_hasCd('melee', weaponCd)) {
       _setCd('melee');
       equipBestMeleeWeapon(bot);
       try {
@@ -183,26 +242,25 @@ async function combatTick(bot, anchorPos) {
 function startAttack(bot, username) {
   setBehavior(bot, 'attack', username);
   bot.chat('On it.');
+  bot._shieldUp = false;
   equipShield(bot);
   const movements = createMovements(bot);
   bot.pathfinder.setMovements(movements);
-  let shieldUp = false;
-  const lower = () => { if (shieldUp) { bot.deactivateItem(); shieldUp = false; } };
-  const raise = () => { if (!shieldUp) { bot.activateItem(true); shieldUp = true; } };
 
   state.behaviorInterval = setInterval(async () => {
-    if (state.behaviorMode !== 'attack') { lower(); return; }
+    if (state.behaviorMode !== 'attack') {
+      if (bot._shieldUp) { bot.deactivateItem(); bot._shieldUp = false; }
+      return;
+    }
     if (bot.health <= RETREAT_HP) {
-      lower(); bot.pathfinder.setGoal(null);
+      if (bot._shieldUp) { bot.deactivateItem(); bot._shieldUp = false; }
+      bot.pathfinder.setGoal(null);
       bot.chat('I need to retreat!');
       setBehavior(bot, 'idle', username);
       return;
     }
     const engaged = await combatTick(bot, null);
-    if (!engaged) { lower(); bot.pathfinder.setGoal(null); return; }
-    // Shield up only when in melee range
-    const inMelee = bot.nearestEntity(e => isHostileMob(e) && e.position.distanceTo(bot.entity.position) <= MELEE_RANGE);
-    if (inMelee) raise(); else lower();
+    if (!engaged && bot._shieldUp) { bot.deactivateItem(); bot._shieldUp = false; }
   }, 200);
 }
 
@@ -326,18 +384,20 @@ async function shootAtGazeTarget(bot) {
 
 function startAssist(bot, username) {
   setBehavior(bot, 'assist', username);
+  bot._shieldUp = false;
   equipShield(bot);
   bot.chat('Covering you.');
   const movements = createMovements(bot);
   bot.pathfinder.setMovements(movements);
-  let shieldUp = false;
-  const lower = () => { if (shieldUp) { bot.deactivateItem(); shieldUp = false; } };
-  const raise = () => { if (!shieldUp) { bot.activateItem(true); shieldUp = true; } };
 
   state.behaviorInterval = setInterval(async () => {
-    if (state.behaviorMode !== 'assist') { lower(); return; }
+    if (state.behaviorMode !== 'assist') {
+      if (bot._shieldUp) { bot.deactivateItem(); bot._shieldUp = false; }
+      return;
+    }
     if (bot.health <= RETREAT_HP) {
-      lower(); bot.pathfinder.setGoal(null);
+      if (bot._shieldUp) { bot.deactivateItem(); bot._shieldUp = false; }
+      bot.pathfinder.setGoal(null);
       bot.chat('I need to retreat!');
       setBehavior(bot, 'idle', username);
       return;
@@ -348,12 +408,9 @@ function startAssist(bot, username) {
 
     // Search for targets around the PLAYER, not just the bot
     const engaged = await combatTick(bot, player.position);
-    if (engaged) {
-      const inMelee = bot.nearestEntity(e => isHostileMob(e) && e.position.distanceTo(bot.entity.position) <= MELEE_RANGE);
-      if (inMelee) raise(); else lower();
-    } else {
-      // No mob — follow player
-      lower();
+    if (!engaged) {
+      // No mob — lower shield and follow player
+      if (bot._shieldUp) { bot.deactivateItem(); bot._shieldUp = false; }
       const dist = bot.entity.position.distanceTo(player.position);
       if (dist > 4) {
         bot.pathfinder.setGoal(new GoalNear(player.position.x, player.position.y, player.position.z, 3), true);
@@ -443,7 +500,7 @@ function startBowMode(bot) {
 
 module.exports = {
   isHostileMob,
-  equipBestMeleeWeapon, equipBestRanged, equipShield,
+  equipBestMeleeWeapon, equipBestRanged, equipShield, equipAllArmor,
   combatTick,
   solveAimPoint, shootAtEntity, shootAtPosition, shootAtGazeTarget,
   startAttack, startAssist, startBowMode,

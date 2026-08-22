@@ -6,11 +6,24 @@ const skillEngine = require('./skill-engine');
 const state    = require('./state');
 const { setBehavior } = require('./behavior');
 const { createMovements } = require('./movement');
-const { isHostileMob } = require('./combat');
+const { isHostileMob, startAssist } = require('./combat');
 const { queryLetta, parseAction, chatLong } = require('./letta');
 const { MASTER, BOT_USERNAME, DEATH_VERBS, ADVANCEMENT_RE, getServerConfig } = require('./config');
-const { goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { goals: { GoalBlock, GoalNear } } = require('./pathfinder-compat');
+const db = require('./db');
 const { getModdedBlockName } = require('./registry-patch');
+const freyr = require('./freyr');
+const { clones } = require('./clones');
+
+// Persistent set of block positions that failed openContainer (survives restarts).
+// Stored as "x,y,z" keys. Populated from DB on first load, written back on new failures.
+const failedContainers = (() => {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS failed_containers (pos TEXT PRIMARY KEY, block_name TEXT, failed_at INTEGER)`).run();
+    const rows = db.prepare('SELECT pos FROM failed_containers').all();
+    return new Set(rows.map(r => r.pos));
+  } catch (_) { return new Set(); }
+})();
 
 // ── Session hint ──────────────────────────────────────────────────────────────
 
@@ -63,15 +76,19 @@ function startProximityMonitor(bot) {
       const now2 = Date.now();
       if (now2 - startTime > STARTUP_GRACE_MS) {
         const nearbyHostiles = Object.values(bot.entities).filter(e =>
-          isHostileMob(e) && e.position.distanceTo(bot.entity.position) < THREAT_RANGE
+          isHostileMob(e) && e.position && e.position.distanceTo(bot.entity.position) < THREAT_RANGE
         );
         const newThreats = nearbyHostiles.filter(e => !knownThreats.has(e.id));
-        if (newThreats.length > 0 && now2 - lastThreatWarnTime >= THREAT_WARN_COOLDOWN_MS) {
-          lastThreatWarnTime = now2;
-          const names = [...new Set(newThreats.map(e => e.name))].join(', ');
-          queryLetta(
-            `${sessionHintFor(MASTER)}[THREAT EVENT] You just spotted hostile mob(s) nearby: ${names}. React briefly — a quick warning or tense observation.\n[Respond in: en]`
-          ).then(r => { const { text: t } = parseAction(r); if (t) chatLong(bot, t); }).catch(() => {});
+        if (newThreats.length > 0) {
+          // Auto-engage: switch to assist mode so Nilo fights instead of just watching.
+          startAssist(bot, MASTER);
+          if (now2 - lastThreatWarnTime >= THREAT_WARN_COOLDOWN_MS) {
+            lastThreatWarnTime = now2;
+            const names = [...new Set(newThreats.map(e => e.name))].join(', ');
+            queryLetta(
+              `${sessionHintFor(MASTER)}[THREAT EVENT] You just spotted hostile mob(s) nearby: ${names}. React briefly — a quick warning or tense observation.\n[Respond in: en]`
+            ).then(r => { const { text: t } = parseAction(r); if (t) chatLong(bot, t); }).catch(() => {});
+          }
         }
         knownThreats = new Set(nearbyHostiles.map(e => e.id));
       }
@@ -107,13 +124,42 @@ function startProximityMonitor(bot) {
 function startAutonomousBehaviors(bot) {
   if (state.autonomousInterval) clearInterval(state.autonomousInterval);
 
-  const CONTAINER_KEYWORDS = ['chest', 'barrel', 'crate', 'storage', 'bin', 'locker', 'safe', 'cabinet', 'trunk', 'box', 'vault', 'strongbox', 'terminal', 'interface', 'grid', 'cable_bus'];
-  const triedContainers = new Set(); // block positions that failed openContainer — skip them
+  const CONTAINER_KEYWORDS = ['chest', 'barrel', 'crate', 'storage', 'bin', 'locker', 'safe', 'cabinet', 'trunk', 'box', 'vault', 'strongbox'];
+  // cable_bus / terminal / interface removed — those are AE2 parts, not openable by bot.openContainer
 
   let lookCooldown    = 0;
   let exploreCooldown = 0;
 
+  // ── Stray Freyr Sword scan ────────────────────────────────────────────────
+  // Clones that die or disconnect without going through retractBeforeDisconnect
+  // leave their summoned sword stranded in the world, bound to a UUID that
+  // outlives them. Every ~30s, look for nearby freyr_sword_entity that aren't
+  // Nilo's own and don't belong to any currently-online clone — log the find
+  // once per UUID so it doesn't spam, but don't chat about it (housekeeping).
+  let strayScanCooldown = 0;
+  const seenStrayUUIDs  = new Set();
+
   state.autonomousInterval = setInterval(async () => {
+    if (strayScanCooldown > 0) {
+      strayScanCooldown--;
+    } else {
+      strayScanCooldown = 15; // ~30s at 2s/tick
+      try {
+        const onlineCloneUUIDs = [...clones.values()].map(c => freyr.getFreyrUUID(c));
+        const strays = freyr.findStraySwords(bot, onlineCloneUUIDs);
+        for (const e of strays) {
+          if (seenStrayUUIDs.has(e.uuid)) continue;
+          seenStrayUUIDs.add(e.uuid);
+          const p = e.position;
+          console.log(`[FREYR] Stray sword spotted at (${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)}) — uuid=${e.uuid} (likely left behind by a clone that died or disconnected).`);
+        }
+        // Forget UUIDs that are no longer nearby — lets a sword be re-flagged
+        // if it reappears later (e.g. after a chunk reload).
+        const stillNearby = new Set(strays.map(e => e.uuid));
+        for (const uuid of seenStrayUUIDs) if (!stillNearby.has(uuid)) seenStrayUUIDs.delete(uuid);
+      } catch (_) {}
+    }
+
     // ── Natural look ──────────────────────────────────────────────────────
     if (lookCooldown > 0) {
       lookCooldown--;
@@ -146,7 +192,7 @@ function startAutonomousBehaviors(bot) {
         if (!CONTAINER_KEYWORDS.some(kw => name.includes(kw))) return false;
         if (b.position) {
           const key = `${b.position.x},${b.position.y},${b.position.z}`;
-          if (triedContainers.has(key)) return false;
+          if (failedContainers.has(key)) return false;
         }
         return true;
       },
@@ -176,16 +222,22 @@ function startAutonomousBehaviors(bot) {
         if (chestText) await chatLong(bot, chestText);
       } catch (err) {
         console.error(`[NILO] Container open failed (${chestBlock.name}): ${err.message}`);
-        triedContainers.add(key); // don't retry blocks that can't be opened
+        failedContainers.add(key); // persistent — won't retry this block in future sessions
+        try { db.prepare('INSERT OR IGNORE INTO failed_containers (pos, block_name, failed_at) VALUES (?,?,?)').run(key, chestBlock.name, Math.floor(Date.now()/1000)); } catch (_) {}
       }
-      state.isLooting = false;
+      // Only clear isLooting if a manual command hasn't taken over
+      if (!state.manualInteractLock) state.isLooting = false;
       return;
     }
 
-    // No chest nearby — wander to a random position
+    // No chest nearby — wander, but only if MASTER is online and close enough.
+    // Without this guard Nilo drifts unboundedly and dies far from base.
+    const masterForWander = bot.players[MASTER]?.entity;
+    if (!masterForWander || masterForWander.position.distanceTo(bot.entity.position) > 30) return;
+
     const pos = bot.entity.position;
-    const rx  = pos.x + (Math.random() * 40 - 20);
-    const rz  = pos.z + (Math.random() * 40 - 20);
+    const rx  = pos.x + (Math.random() * 20 - 10);
+    const rz  = pos.z + (Math.random() * 20 - 10);
     const movements = createMovements(bot);
     bot.pathfinder.setMovements(movements);
     bot.pathfinder.setGoal(new GoalBlock(Math.floor(rx), Math.floor(pos.y), Math.floor(rz)));
@@ -214,32 +266,8 @@ function startSkillAutonomyTicker(bot) {
 
 // ── Log watcher ───────────────────────────────────────────────────────────────
 
-function handleLogEvent(payload) {
-  const bot = state.activeBotRef;
-  if (!bot) return;
-
-  let eventMsg = null;
-
-  const deathMatch = payload.match(DEATH_VERBS);
-  if (deathMatch && deathMatch[1] !== BOT_USERNAME) {
-    eventMsg = `[SERVER EVENT] Death message: "${payload}"`;
-  }
-
-  const advMatch = payload.match(ADVANCEMENT_RE);
-  if (advMatch) {
-    eventMsg = `[SERVER EVENT] ${advMatch[1]} earned the advancement "${advMatch[3]}".`;
-  }
-
-  if (!eventMsg) return;
-
-  console.log(`[NILO] Log event: ${eventMsg}`);
-  queryLetta(sessionHintFor('') + eventMsg + '\n[Respond in: en]')
-    .then((response) => {
-      const { text } = parseAction(response);
-      console.log(`[NILO] -> ${text}`);
-      if (text) chatLong(bot, text);
-    })
-    .catch((err) => { console.error('[NILO] Letta error on log event:', err.message); });
+function handleLogEvent(_payload) {
+  // Automatic responses to server log events (deaths, advancements) disabled.
 }
 
 function watchLog() {

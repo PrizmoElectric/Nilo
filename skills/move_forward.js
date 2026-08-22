@@ -1,7 +1,7 @@
 // Skill: move_forward
 // Description: walk forward for 2 seconds
 // Handcrafted: true
-const { Movements, goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { Movements, goals: { GoalBlock, GoalNear } } = require('../pathfinder-compat');
 const Vec3 = require('vec3');
 
 async function niloSkill(bot) {

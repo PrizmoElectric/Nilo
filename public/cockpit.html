@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Nilo Cockpit</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#111; color:#ddd; font-family: monospace; overflow:hidden; }
+  #layout { display:flex; flex-direction:column; height:100vh; }
+  #viewer-frame { flex:1 1 auto; border:0; width:100%; background:#000; }
+  #terminal { flex:0 0 220px; display:flex; flex-direction:column; background:#0a0a0a; border-top:2px solid #333; }
+  #log { flex:1; overflow-y:auto; padding:6px 10px; font-size:13px; white-space:pre-wrap; }
+  #log div { margin:1px 0; }
+  #log .status { color:#888; }
+  #log .error  { color:#f66; }
+  #log .nilo   { color:#7cf; }
+  #log .me     { color:#8f8; }
+  #input-row { display:flex; align-items:center; border-top:1px solid #333; }
+  #status-dot { width:10px; height:10px; border-radius:50%; margin:0 10px; background:#844; flex-shrink:0; transition:background .2s; }
+  #status-dot.live { background:#4a4; }
+  #cmd { flex:1; background:#000; color:#ddd; border:0; padding:10px 10px 10px 0; font-family:monospace; font-size:14px; outline:none; }
+  #cmd::placeholder { color:#555; }
+</style>
+</head>
+<body>
+<div id="layout">
+  <iframe id="viewer-frame" src="http://localhost:3009/"></iframe>
+  <div id="terminal">
+    <div id="log"></div>
+    <div id="input-row">
+      <div id="status-dot"></div>
+      <input id="cmd" type="text" placeholder="type a command — no # needed here (e.g. step 2 forward, follow, mine this)" autofocus>
+    </div>
+  </div>
+</div>
+<script>
+  const log   = document.getElementById('log');
+  const dot   = document.getElementById('status-dot');
+  const input = document.getElementById('cmd');
+
+  function addLine(cls, text) {
+    const div = document.createElement('div');
+    div.className = cls;
+    div.textContent = text;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  let ws;
+  function connect() {
+    ws = new WebSocket('ws://' + location.hostname + ':4000');
+    ws.onopen  = () => { dot.classList.add('live'); addLine('status', '[connected]'); };
+    ws.onclose = () => { dot.classList.remove('live'); addLine('status', '[disconnected — retrying in 2s]'); setTimeout(connect, 2000); };
+    ws.onerror = () => {};
+    ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { addLine('status', ev.data); return; }
+      if (msg.type === 'nilo')        addLine('nilo', 'NILO: ' + msg.text);
+      else if (msg.type === 'error')  addLine('error', '[error] ' + msg.text);
+      else if (msg.type === 'status') addLine('status', '[' + msg.text + ']');
+    };
+  }
+  connect();
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const text = input.value.trim();
+    if (!text) return;
+    addLine('me', '> ' + text);
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(text);
+    else addLine('error', '[not connected]');
+    input.value = '';
+  });
+</script>
+</body>
+</html>

@@ -1,10 +1,10 @@
 // activities.js — farming, fishing, building, dancing, sleeping, grave pickup
 
 const Vec3 = require('vec3');
-const { goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { goals: { GoalBlock, GoalNear } } = require('./pathfinder-compat');
 const state  = require('./state');
 const { setBehavior, clearBehavior } = require('./behavior');
-const { createMovements } = require('./movement');
+const { createMovements, collectBlock } = require('./movement');
 const { isBuildable } = require('./items');
 const { loadConfig, MASTER, MATURE_CROPS } = require('./config');
 const { getModdedBlockName, setManualOverride } = require('./registry-patch');
@@ -74,7 +74,7 @@ async function runFarm(bot) {
     for (const pos of matureBlocks) {
       const block = bot.blockAt(pos);
       if (!block) continue;
-      await bot.collectBlock.collect(block);
+      await collectBlock(bot, block);
     }
 
     // Walk to chest and deposit
@@ -105,103 +105,121 @@ async function runFarm(bot) {
 
 // ── Grave pickup ──────────────────────────────────────────────────────────────
 
+// isGraveBlock — match only actual grave/tombstone blocks.
+// Check BLOCK name only (after the ':'), not the mod name, to avoid
+// false positives like graveyard:tg_grass_block from The Graveyard mod.
+function makeIsGrave(bot) {
+  const graveResolved = resolveBlock(bot, 'yigd:grave');
+  const graveBlockId  = graveResolved?.id ?? null;
+  return function isGraveBlock(b) {
+    if (!b) return false;
+    const full = (b.name ?? '').toLowerCase();
+    if (full === 'gravel' || full === 'air') return false;
+    if (graveBlockId !== null && b.type === graveBlockId) return true;
+    // Only match on the block name part (after ':'), not the namespace
+    const blockName = full.includes(':') ? full.split(':')[1] : full;
+    return blockName === 'grave' || blockName.startsWith('grave_') ||
+           blockName.endsWith('_grave') || blockName.includes('gravestone') ||
+           blockName.includes('tombstone') || blockName.includes('soulstone');
+  };
+}
+
+// graveGridScan — cheap O(~700) scan of a small cube around a position.
+// Much faster than findBlocks with large radius. Returns Vec3 or null.
+function graveGridScan(bot, origin, isGrave, radius = 4) {
+  for (let dy = radius; dy >= -radius; dy--) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        const b = bot.blockAt(origin.offset(dx, dy, dz));
+        if (b && isGrave(b)) return b.position.clone();
+      }
+    }
+  }
+  return null;
+}
+
 async function collectGrave(bot) {
   clearBehavior(bot);
   state.isLooting = true;
 
-  const graveResolved = resolveBlock(bot, 'yigd:grave');
-  const graveBlockId  = graveResolved?.id ?? null;
+  const isGrave = makeIsGrave(bot);
 
-  function isGraveBlock(b) {
-    const name = (b.name ?? '').toLowerCase();
-    if (name === 'gravel') return false;
-    // Resolve yigd:grave by registry id (works regardless of stateId reordering)
-    if (graveBlockId !== null && b.type === graveBlockId) return true;
-    // Named modded blocks
-    if (name.includes(':') && (name.includes('grave') || name.includes('tombstone') || name.includes('soulstone'))) return true;
-    if (['gravestone','tombstone'].some(k => name.includes(k))) return true;
-    // Unnamed/unknown modded blocks — mineflayer can't resolve the registry name for
-    // many Fabric mods. Match any block with an empty or 'unknown' name that has a
-    // non-empty bounding box (i.e. it's a real solid/interactable block, not air).
-    if ((name === '' || name === 'unknown') && b.boundingBox && b.boundingBox !== 'empty') return true;
-    return false;
+  // ── Find the grave ──────────────────────────────────────────────────────
+  // Strategy: navigate to the death position first so the chunks are loaded,
+  // then do a small grid scan. Avoids the expensive 200-block findBlocks scan.
+  const deathPos = state.deathPosition;
+  let gravePos = null;
+
+  if (deathPos && !isNaN(deathPos.x) && !isNaN(deathPos.z)) {
+    // Navigate toward death position if we're far away
+    const distToDeath = bot.entity.position.distanceTo(deathPos);
+    if (distToDeath > 40) {
+      bot.chat(`Heading back to where I died...`);
+      console.log(`[GRAVE] Navigating to death pos (${Math.round(distToDeath)}m away)`);
+      try {
+        const mv = createMovements(bot);
+        bot.pathfinder.setMovements(mv);
+        await bot.pathfinder.goto(new GoalNear(deathPos.x, deathPos.y, deathPos.z, 8));
+      } catch (_) {}
+    }
+    gravePos = graveGridScan(bot, deathPos, isGrave, 6);
   }
 
-  // Log unknown-named blocks nearby to help identify the grave type ID
-  const unknownBlocks = [];
-  bot.findBlock({ matching: b => {
-    if ((b.name === '' || b.name === 'unknown') && b.boundingBox !== 'empty' && unknownBlocks.length < 5) {
-      unknownBlocks.push(`type=${b.type} stateId=${b.stateId} at ${b.position}`);
+  // Fallback: scan from current position if death position unavailable or grave not found
+  if (!gravePos) {
+    const candidates = bot.findBlocks({
+      matching: b => isGrave(b),
+      maxDistance: 64,
+      count: 5,
+    }).filter(v => v != null);
+
+    if (candidates.length) {
+      const origin = (deathPos && !isNaN(deathPos.x)) ? deathPos : bot.entity.position;
+      candidates.sort((a, b) => a.distanceTo(origin) - b.distanceTo(origin));
+      gravePos = candidates[0];
     }
-    return false;
-  }, maxDistance: 64 });
-  if (unknownBlocks.length) console.log('[NILO] Unknown modded blocks nearby:', unknownBlocks.join(' | '));
+  }
 
-  const allGraves = bot.findBlocks({
-    matching: b => {
-      const match = isGraveBlock(b);
-      if (match) console.log(`[NILO] Found grave block: "${b.name}" type=${b.type} at ${b.position}`);
-      return match;
-    },
-    maxDistance: 200,
-    count: 20,
-  }).filter(v => v != null);
-
-  if (!allGraves.length) {
-    const modded = [];
-    bot.findBlock({ matching: b => {
-      if (b.name.includes(':') && modded.length < 30) modded.push(b.name);
-      return false;
-    }, maxDistance: 64 });
-    console.log('[NILO] No grave found. Nearby modded blocks:', [...new Set(modded)].join(', ') || 'none');
+  if (!gravePos) {
     bot.chat("I can't find my grave nearby.");
+    console.log('[GRAVE] No grave found near death pos or current pos.');
+    state.isLooting = false;
     return;
   }
 
-  // Pick the grave closest to where we died, falling back to closest to bot
-  const origin = state.deathPosition || bot.entity.position;
-  allGraves.sort((a, b) => a.distanceTo(origin) - b.distanceTo(origin));
-  const gravePos = allGraves[0];
   const grave = bot.blockAt(gravePos);
-  console.log(`[NILO] Targeting grave at ${gravePos} (death pos: ${state.deathPosition})`);
+  console.log(`[GRAVE] Targeting grave "${grave?.name}" type=${grave?.type} at ${gravePos}`);
 
   const p = gravePos;
-  bot.chat(`Found it. Going to ${p.x}, ${p.y}, ${p.z}.`);
+  bot.chat(`Found it. Going to get it...`);
 
   try {
     const movements = createMovements(bot);
     bot.pathfinder.setMovements(movements);
 
-    // GoalNear only checks XZ distance — navigate to an adjacent block at the
-    // correct Y level so the bot is always within reach regardless of elevation.
+    // Try each adjacent block at grave Y level; fall back to GoalNear
     const adjacent = [
-      new Vec3(p.x + 1, p.y, p.z),
-      new Vec3(p.x - 1, p.y, p.z),
-      new Vec3(p.x, p.y, p.z + 1),
-      new Vec3(p.x, p.y, p.z - 1),
+      new Vec3(p.x + 1, p.y, p.z), new Vec3(p.x - 1, p.y, p.z),
+      new Vec3(p.x, p.y, p.z + 1), new Vec3(p.x, p.y, p.z - 1),
     ];
     let reached = false;
     for (const adj of adjacent) {
-      try {
-        await bot.pathfinder.goto(new GoalBlock(adj.x, adj.y, adj.z));
-        reached = true;
-        break;
-      } catch (_) {}
+      try { await bot.pathfinder.goto(new GoalBlock(adj.x, adj.y, adj.z)); reached = true; break; }
+      catch (_) {}
     }
     if (!reached) {
-      // Last resort: standard GoalNear in case all adjacent blocks are impassable
       await bot.pathfinder.goto(new GoalNear(p.x, p.y, p.z, 2));
     }
 
-    // Re-fetch the block after navigation — the pre-nav reference can be stale
     const freshGrave = bot.blockAt(new Vec3(p.x, p.y, p.z));
-    if (!freshGrave || !isGraveBlock(freshGrave)) {
+    if (!freshGrave || !isGrave(freshGrave)) {
       bot.chat("The grave disappeared before I could collect it.");
-      console.log('[NILO] Grave block gone after navigation. Was:', grave?.name);
+      console.log('[GRAVE] Grave gone after navigation. Was:', grave?.name);
+      state.isLooting = false;
       return;
     }
 
-    await new Promise(r => setTimeout(r, 200)); // let physics settle
+    await new Promise(r => setTimeout(r, 200));
 
     // Try opening as a container (YIGD exposes grave as inventory)
     try {
@@ -212,10 +230,10 @@ async function collectGrave(bot) {
       }
       container.close();
       bot.chat(`Got my stuff back (${items.length} stacks).`);
-      console.log(`[NILO] Collected grave (${items.length} item stacks).`);
+      console.log(`[GRAVE] Collected grave (${items.length} item stacks).`);
       return;
     } catch (containerErr) {
-      console.log('[NILO] openContainer failed:', containerErr.message, '— trying sneak+right-click');
+      console.log('[GRAVE] openContainer failed:', containerErr.message, '— trying sneak+right-click');
     }
 
     // Fallback: sneak + right-click (some YIGD versions auto-collect on sneak)
@@ -225,7 +243,7 @@ async function collectGrave(bot) {
     await new Promise(r => setTimeout(r, 800));
     bot.setControlState('sneak', false);
     bot.chat('Tried to collect the grave.');
-    console.log('[NILO] Activated grave block (sneak fallback).');
+    console.log('[GRAVE] Activated grave block (sneak fallback).');
   } catch (err) {
     console.error('[NILO] Grave collect error:', err.message);
     bot.chat("Something went wrong trying to get my grave.");
@@ -513,7 +531,7 @@ async function sleepInBed(bot) {
       bot.activateBlock(freshBed);
       await sleeping;
     }
-    bot.chat('Goodnight...');
+    bot.chat('Sleeping...');
   } catch (err) {
     bot.chat(`Can't sleep: ${err.message}`);
     console.error('[NILO] Sleep error:', err.message);
@@ -598,7 +616,7 @@ async function writeSign(bot, text) {
 }
 
 module.exports = {
-  runFarm, collectGrave, startFishing,
+  runFarm, collectGrave, makeIsGrave, graveGridScan, startFishing,
   buildSimpleHouse,
   startDance, sleepInBed,
   writeSign, wrapSignText,

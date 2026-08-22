@@ -1,8 +1,16 @@
 NILO — MANUAL DE COMANDOS
 =========================
 Todos os comandos são ditos no chat do Minecraft pelo MASTER (PrizmoElectric).
-Variantes em pt-BR e en-US são aceitas. O prefixo "!nilo" é opcional no Discord.
-Última atualização: 2026-06-05
+Variantes em pt-BR e en-US são aceitas.
+
+IMPORTANTE: TODO comando (inclusive os desta lista sem "#nilo" na frente, tipo
+"follow"/"sit"/"mine this") agora exige o prefixo "#" para ser executado.
+Sem "#", a mensagem vai direto pro Letta como conversa normal — nada é
+interpretado como comando. Isso vale no Minecraft, no Discord e na sessão CLI.
+Exemplo: para usar o comando "follow" (documentado abaixo sem prefixo por
+brevidade), digite "#follow". Comandos administrativos continuam com "#nilo"
+na frente (ex.: "#nilo quit").
+Última atualização: 2026-08-05
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -91,6 +99,111 @@ use bow / archer mode / sniper mode / usa o arco / modo arqueiro
 
 shoot that / shoot it / atira nisso / atira nele
   Dispara uma flecha na direção que o MASTER está olhando.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ESPADA DE FREYR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Requer ter a Freyr Sword (soulsweapons:freyr_sword) no inventário.
+
+summon freyr / activate freyr / freyr / chama o freyr / convoca o freyr
+  Equipa e convoca a espada-companheira de Freyr.
+
+freyr return / return freyr / dismiss freyr / chama o freyr de volta / dispensa o freyr
+  Chama a espada de Freyr de volta (recolhe).
+
+freyr hold / freyr stay / freyr guard / freyr fica
+  Espada de Freyr para de seguir e fica parada na posição.
+
+freyr follow / freyr attack / freyr segue
+  Espada de Freyr volta a seguir o Nilo.
+
+freyr status / where is freyr / cadê o freyr
+  Relata a posição/estado da espada de Freyr (só conta como "minha" se o
+  UUID já tiver sido sincronizado pelo servidor — caso contrário avisa que
+  pode ser de outro jogador).
+
+freyr scan / debug freyr / detect freyr
+  Lista entidades próximas e mostra se o UUID da espada já sincronizou
+  (uso de diagnóstico — log detalhado no console).
+
+Recolhimento automático ao desconectar (silencioso, sem aviso no chat):
+  Antes de qualquer logoff controlado — "leave"/"disconnect" no chat,
+  "#nilo quit", ou "nilo stop"/"nilo restart" via systemd (SIGTERM/SIGINT) —
+  Nilo chama sua Freyr Sword de volta automaticamente, se estiver convocada.
+  Isso evita que a espada fique perdida no mundo presa a um UUID que
+  sobrevive entre sessões (causa do bug em que Nilo "achava" que sua espada
+  ainda estava convocada quando na verdade não estava mais sob seu controle).
+  Não funciona em desconexões abruptas (kick do servidor, crash) — não há
+  janela para mandar o pacote final nesses casos.
+
+Detecção de espadas perdidas ("stray swords"):
+  A cada ~30s, durante o comportamento autônomo, Nilo verifica se há
+  freyr_sword_entity próximas que não são a sua e não pertencem a nenhum
+  clone atualmente online — prováveis espadas abandonadas por clones que
+  morreram ou caíram da conexão sem recolher a sua antes. Cada achado novo
+  é registrado uma vez no log (tag [FREYR], arquivo logs/<data>/freyr.log)
+  com posição e UUID; não gera mensagem no chat (é só monitoramento).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXÉRCITO DE CLONES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Cada clone é uma conexão separada ao servidor (NILO_CLONE1...NILO_CLONE20).
+São bots minimalistas — sem Letta/Discord — só andam, conectam e controlam
+sua própria Freyr Sword. Lutam contra hostis próximos e pegam itens largados
+no chão sozinhos — igual ao comportamento de inventário do Nilo (sem
+precisar de comando). Cada clone usa a skin real de Nilo (aplicada via
+FabricTailor no momento em que entra no servidor — visível para qualquer
+jogador, não só no viewer). Se um clone se afastar mais de 50 blocos de
+Nilo, ele é teleportado de volta automaticamente (recolhendo a Freyr Sword
+antes do teleporte e reconvocando depois, se o "modo Freyr" estiver ligado).
+
+Em vez de seguir Nilo diretamente (o que fazia todos convergirem para o
+mesmo ponto e ficarem um dentro do outro), cada clone mantém uma posição
+fixa em um anel ao redor de Nilo — formação que acompanha Nilo conforme ele
+se move. Eles também respeitam o espaço uns dos outros: se dois clones
+ficam muito próximos, um deles dá um passo para o lado automaticamente.
+
+Cada clone precisa de sua própria Freyr Sword no inventário para usar o
+"modo Freyr". Se Nilo estiver carregando mais de uma espada Freyr sobressalente
+(além da que guarda para si), ele transfere uma diretamente para o
+inventário de um clone sem espada — transferência instantânea pelo mod
+Solsai (servidor), sem precisar largar/teleportar/catar fisicamente. Nilo
+também reabastece pão automaticamente: se algum clone ficar com 10 pães ou
+menos e Nilo tiver sobra além do que guarda para si, ele transfere o
+suficiente para repor cada clone a ~16 pães — assim eles não passam fome
+durante exploração/combate prolongados. Ambas as distribuições são
+automáticas, checadas a cada ~15s, e não exigem fornecimento manual desde
+que Nilo tenha sobras no inventário.
+
+O HUD do mod cliente prizmo-system também enxerga os clones — cada um
+reporta seu modo de comportamento (ataque/perseguição/parado) e inventário
+ao mod Solsai, então as caixas de ESP coloridas e o inventário detalhado no
+painel funcionam para o exército inteiro, não só para Nilo.
+
+cloneon / clone on
+  Ativa o modo clone — necessário antes de "clone N".
+
+cloneoff / clone off
+  Desativa o modo clone e desconecta todos os clones ativos.
+
+clone N  (N de 0 a 20)
+  Ajusta o tamanho do exército para N clones (só funciona com o modo clone
+  ativo). As conexões são escalonadas (~2.5s entre cada uma) para não
+  sobrecarregar o servidor. Se N for menor que o número atual de clones,
+  os de número mais alto são desconectados (recolhendo a Freyr Sword antes
+  de sair). "clone 0" desmancha o exército inteiro sem desativar o modo
+  clone — use de novo "clone N" depois para reconvocar sem precisar de
+  "cloneon".
+
+freyr on
+  Liga o "modo Freyr" global dos clones — todos passam a convocar e manter
+  suas espadas de Freyr ativas (verificado a cada poucos segundos).
+
+freyr off
+  Desliga o "modo Freyr" global — todos os clones recolhem suas espadas
+  de Freyr de volta ao inventário.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -259,7 +372,7 @@ CONFIANÇA
 
 trust <jogador> / confia em <jogador>
   Adiciona um jogador à lista de confiança. Jogadores confiados podem dar
-  comandos básicos de comportamento (!nilo follow/stay/sit/wander/attack/defensive/passive).
+  comandos básicos de comportamento (#nilo follow/stay/sit/wander/attack/defensive/passive).
 
 untrust <jogador> / para de confiar em <jogador> / distrust <jogador>
   Remove o jogador da lista de confiança.
@@ -374,46 +487,46 @@ reboot
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-COMANDOS ADMIN (prefixo !nilo obrigatório em jogo)
+COMANDOS ADMIN (prefixo #nilo obrigatório em jogo)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-!nilo quit
+#nilo quit
   Desconecta Nilo do servidor sem reconectar.
 
-!nilo setfarm X1 Y1 Z1 X2 Y2 Z2
+#nilo setfarm X1 Y1 Z1 X2 Y2 Z2
   Define a área de fazenda como um cuboide entre os dois cantos informados.
 
-!nilo setchest X Y Z
+#nilo setchest X Y Z
   Define a posição do baú principal para o sistema de fazenda.
 
-!nilo farm
+#nilo farm
   Executa a rotina de colheita imediatamente.
 
-!nilo learn <tarefa>
+#nilo learn <tarefa>
   Gera uma nova skill (equivalente a "learn how to <tarefa>").
 
-!nilo do <skill>
+#nilo do <skill>
   Executa a skill pelo nome.
 
-!nilo skills
+#nilo skills
   Lista todas as skills.
 
-!nilo forget <skill>
+#nilo forget <skill>
   Deleta a skill.
 
-!nilo queue <tarefa>
+#nilo queue <tarefa>
   Adiciona ao currículo autônomo.
 
-!nilo autonomous on/off
+#nilo autonomous on/off
   Liga/desliga o modo autônomo.
 
-!nilo trust <jogador> / !nilo untrust <jogador> / !nilo trusted
+#nilo trust <jogador> / #nilo untrust <jogador> / #nilo trusted
   Gerencia a lista de confiança.
 
-!nilo follow / !nilo stay / !nilo sit / !nilo wander
+#nilo follow / #nilo stay / #nilo sit / #nilo wander
   Comandos de comportamento via prefixo (para jogadores confiados também).
 
-!nilo attack / !nilo defensive / !nilo passive
+#nilo attack / #nilo defensive / #nilo passive
   Comandos de combate via prefixo.
 
 
@@ -474,16 +587,48 @@ COMANDOS EXCLUSIVOS DO DISCORD
   Salva o servidor atual como um novo perfil.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTROLE REMOTO E MODO ESPECTADOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+POSSESSÃO (controlar o Nilo diretamente)
+  No prizmo-system, shift + botão direito no Nilo abre a tela de controle
+  remoto (BotSneakScreen). WASD move, SPACE pula, SHIFT agacha, botão
+  esquerdo ataca, botão direito usa o item, mouse mira. ESC solta o controle.
+  Enquanto possuído, o Nilo para qualquer comportamento automático (combate,
+  follow, etc.) e responde só ao seu input. Ao soltar (ESC), ele volta ao
+  comportamento de antes.
+
+ESPECTADOR (assistir pela visão do Nilo, sem controlar)
+  Entre com seu cliente de Minecraft normal (não precisa do prizmo-system):
+    endereço: <IP do PC onde o Nilo roda>:25566
+    senha:    nilo123
+  Ao conectar você vira espectador. Comandos disponíveis dentro do servidor
+  de espectador:
+    /spectatortp
+      Teleporta sua câmera até o Nilo.
+    /spectatortp <jogador>
+      Teleporta sua câmera até outro jogador conectado como espectador.
+  Mensagens digitadas no chat como espectador saem como fala do próprio
+  Nilo. Espectador só observa — não move nem controla o Nilo; para isso,
+  use a possessão acima. É uma conexão separada da sessão principal do
+  Nilo no servidor real (porta diferente), então pode ficar conectado ao
+  mesmo tempo em que o Nilo joga normalmente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 NOTAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 - Tudo que não bater com um comando acima é enviado para o Letta (IA), que responde
   em linguagem natural e pode acionar ações automaticamente via [ACTION: name].
 
-- Mensagens começando com "!" (exceto "!nilo") são ignoradas silenciosamente.
+- Nenhum comando funciona sem o prefixo "#" — mensagens sem "#" vão direto
+  pro Letta como conversa, nunca acionam um comando por acidente.
+
+- Mensagens começando com "#" que não batem com nenhum comando reconhecido
+  (nem "#nilo ...") são ignoradas silenciosamente.
 
 - Idioma detectado automaticamente: pt-BR ou en por heurística de palavras.
 
 - Jogadores confiados (não MASTER) só têm acesso a: follow, stay, sit, wander,
-  attack, defensive, passive via prefixo !nilo. Não têm acesso à Letta nem a
+  attack, defensive, passive via prefixo #nilo. Não têm acesso à Letta nem a
   comandos naturais.

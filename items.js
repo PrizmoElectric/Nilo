@@ -1,12 +1,27 @@
 // items.js — inventory and item helpers
 
-const { GoalNear } = require('mineflayer-pathfinder').goals;
+const { GoalNear } = require('./pathfinder-compat').goals;
 const { createMovements } = require('./movement');
+
+// ── Name resolution ───────────────────────────────────────────────────────────
+// Single source of truth for getting a usable name from any item stack.
+// Checks the live Fabric registry and Solsai all-items cache before falling
+// back to mineflayer's own name/displayName.
+
+function resolveItemName(item) {
+  if (!item) return 'unknown';
+  const { getModdedItemName } = require('./registry-patch');
+  const modded = getModdedItemName(item.type);
+  if (modded) return modded;
+  if (item.displayName && item.displayName.toLowerCase() !== 'unknown') return item.displayName;
+  if (item.name && item.name !== 'unknown') return item.name;
+  return `item#${item.type}`;
+}
 
 // ── Equipment slot detection ──────────────────────────────────────────────────
 
 function getEquipDestination(item) {
-  const n = item.name;
+  const n = resolveItemName(item);
   // Head — vanilla + common modded keywords
   if (['helmet','cap','skull','hat','hood','mask','helm','crown','circlet',
        'coif','casque','bascinet','barbute','morion','headband','headgear',
@@ -27,17 +42,17 @@ function getEquipDestination(item) {
 }
 
 function isWeapon(item) {
-  // Broad weapon check — covers vanilla and common modded weapons
+  const n = resolveItemName(item);
   return ['sword','axe','mace','trident','scythe','dagger','spear','glaive',
     'halberd','rapier','hammer','club','saber','claymore','katana','tachi',
     'blade','staff','wand','scepter','tome','spellbook','casting',
     'bow','crossbow','gun','rifle','pistol','musket','flintlock',
-    'whip','flail','maul','quarterstaff','lance'].some(k => item.name.includes(k));
+    'whip','flail','maul','quarterstaff','lance'].some(k => n.includes(k));
 }
 
 function isEquippable(item) {
   if (isWeapon(item)) return true;
-  return getEquipDestination(item) !== 'hand'; // armor / shield / off-hand items
+  return getEquipDestination(item) !== 'hand';
 }
 
 // ── Inventory summary ─────────────────────────────────────────────────────────
@@ -45,12 +60,11 @@ function isEquippable(item) {
 function getInventorySummary(bot) {
   const items = bot.inventory.items();
   if (items.length === 0) return 'empty';
-  return items.map(i => `${i.count}x ${i.name}`).join(', ');
+  return items.map(i => `${i.count}x ${resolveItemName(i)}`).join(', ');
 }
 
 // ── Dropped-item pickup ───────────────────────────────────────────────────────
 
-// Walk to nearest dropped item within maxDist, wait for pickup
 async function pickupNearestItem(bot, maxDist = 8) {
   const dropped = Object.values(bot.entities).filter(e =>
     e.name === 'item' && e.position.distanceTo(bot.entity.position) < maxDist
@@ -61,7 +75,7 @@ async function pickupNearestItem(bot, maxDist = 8) {
   const movements = createMovements(bot);
   bot.pathfinder.setMovements(movements);
   await bot.pathfinder.goto(new GoalNear(item.position.x, item.position.y, item.position.z, 1));
-  await new Promise(r => setTimeout(r, 600)); // let inventory update
+  await new Promise(r => setTimeout(r, 600));
   return true;
 }
 
@@ -73,10 +87,12 @@ const BUILDABLE_KEYWORDS = [
 ];
 
 function isBuildable(item) {
-  return BUILDABLE_KEYWORDS.some(k => item.name.includes(k));
+  const n = resolveItemName(item);
+  return BUILDABLE_KEYWORDS.some(k => n.includes(k));
 }
 
 module.exports = {
+  resolveItemName,
   getEquipDestination, isWeapon, isEquippable,
   getInventorySummary, pickupNearestItem,
   isBuildable,

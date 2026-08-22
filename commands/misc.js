@@ -2,7 +2,8 @@ const state = require('../state');
 const { runCommand } = require('../actions');
 const { getPlayerGazeTarget } = require('../gaze');
 const { getServerConfig, setActiveServer, getActiveServerName, loadServers, BOT_USERNAME } = require('../config');
-const { setManualOverride, getResolved, getDiscovered } = require('../registry-patch');
+const { setManualOverride, getResolved, getDiscovered, getModdedEntityName } = require('../registry-patch');
+const { isHostileMob } = require('../combat');
 const { LETTA_URL } = require('../config');
 const db = require('../db');
 
@@ -10,6 +11,33 @@ const stmtGetEntity = db.prepare('SELECT is_hostile FROM entities WHERE name = ?
 const stmtCountResolved = db.prepare('SELECT COUNT(*) as n FROM state_ids');
 
 async function handle(bot, lower, raw) {
+  // "nilo_nilo" — no-op test command
+  if (/^nilo_nilo\b/.test(lower)) {
+    bot.chat('It does nothing');
+    return true;
+  }
+
+  // "nilo_help" — condensed category list of everything Nilo responds to.
+  // Full detail lives in MANUAL.txt (too long for chat) — this is a quick
+  // reference. All of these require the # prefix in normal chat.
+  if (/^nilo_help\b/.test(lower)) {
+    const lines = [
+      'Commands need # in chat (e.g. #follow). Full list: MANUAL.txt',
+      'Navigation: follow, come here, closer, stay, sit, wander, explore, unstuck, tp me, look at me',
+      'Combat: attack, guard, defensive, passive, use bow, shoot that',
+      'Freyr Sword: summon freyr, freyr return, freyr hold, freyr follow, freyr status',
+      'Clones: clone N, cloneon/cloneoff, freyr on/off',
+      'Mirror: mirror watch, mirror learn, mirror stop',
+      'Activities: tunnel, fish, build house, sleep, dance, farm, write sign, mine this, collect grave',
+      'Teaching: this is <mod:name>, this / what is this, blockname',
+      'Admin (#nilo ...): quit, say, setfarm, setchest, learn, do, skills, forget, queue, autonomous on/off, trust/untrust/trusted',
+      'Server: list servers, current server, switch server <name>, save server <name>',
+      'Misc: stats, status, sync soul, restart, say <text>, nilo_nilo, nilo_help',
+    ];
+    for (const l of lines) bot.chat(l);
+    return true;
+  }
+
   // "stats" — Nilo's health, hunger, armor, XP
   if (/^stats\b/.test(lower)) {
     const attrVal = (...keys) => {
@@ -140,15 +168,16 @@ async function handle(bot, lower, raw) {
     }
 
     if (entity) {
-      const name = entity.username || entity.name || entity.type || 'unknown';
+      // Modded entities have no e.name in mineflayer — resolve via the
+      // entity-type cache (Solsai /all-entities ground truth).
+      const moddedName = (!entity.name || entity.name === 'unknown') && entity.entityType != null
+        ? getModdedEntityName(entity.entityType) : null;
+      const name = entity.username || entity.name || moddedName || entity.type || 'unknown';
       const kind = entity.username ? 'player'
       : entity.kind ? entity.kind.toLowerCase()
       : entity.type || 'entity';
 
-      const dbRow = stmtGetEntity.get((entity.name || '').toLowerCase().replace(/^[a-z_]+:/, ''));
-      const isHostile = dbRow !== undefined ? !!dbRow.is_hostile
-      : (entity.type === 'hostile' || entity.kind === 'Hostile mobs');
-
+      const isHostile = isHostileMob(entity);
       const hostileTag = entity.username ? '' : (isHostile ? ' [hostile]' : ' [passive]');
       const hp = (entity.health != null) ? ` hp:${Math.round(entity.health)}` : '';
       bot.chat(`${name} (${kind}${hostileTag}${hp})`);
@@ -221,6 +250,18 @@ async function handle(bot, lower, raw) {
     const name = saveMatch[1].toLowerCase();
     addServer(name, { host: sc.host, port: sc.port, version: sc.version, auth: sc.auth, description: '' });
     bot.chat(`Saved current server as "${name}".`);
+    return true;
+  }
+
+  // "sync soul" — push soul.txt (system prompt + persona/human memory) to Letta
+  if (/\bsync\s+soul\b/.test(lower)) {
+    const { syncSoul } = require('../soul');
+    try {
+      const parts = await syncSoul();
+      bot.chat(`Soul synced: ${parts.join(', ')}.`);
+    } catch (err) {
+      bot.chat(`Soul sync failed: ${err.message}`);
+    }
     return true;
   }
 

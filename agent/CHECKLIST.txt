@@ -1,13 +1,282 @@
 NILO PROJECT — PENDING ITEMS
 ============================
-Last updated: 2026-05-28 (session 8)
+Last updated: 2026-08-05 (session 17)
 Architecture reference: agent/map.txt
+
+────────────────────────────────────────────────────────
+SESSION 17 (2026-08-05) — NEW THIS SESSION, NEEDS LIVE TEST
+────────────────────────────────────────────────────────
+Nothing below has been run in-game yet — everything was verified statically
+only (syntax checks, module load checks, cross-referencing library source).
+Mark [x] as you confirm each one live; leave [ ] and add a one-line note if
+something fails, so it's easy to tell functional from broken at a glance.
+
+── Totem (combat.js + mineflayer-totem-auto plugin) ──
+[ ] Totem of undying in inventory → auto-equips to offhand within ~1s,
+    without needing to take damage first.
+[ ] Take a lethal hit with a totem equipped → survives (totem pops) instead
+    of dying.
+[ ] Works even OUTSIDE attack/assist mode (e.g. ambushed while mining/
+    following/idle) — this was the actual bug: totem used to only try to
+    equip reactively during active combat, too late for most real deaths.
+
+── Possession mode (remote-control.js) ──
+[ ] Shift + right-click Nilo in prizmo-system → BotSneakScreen opens, WASD/
+    mouse/attack/use actually control him. ESC releases.
+[ ] Force a reconnect (or just wait for one), THEN try possession again —
+    this was the actual bug: worked once, then silently died for the rest
+    of the process after any reconnect.
+
+── Pathfinder engine swap (mineflayer-pathfinder → @miner-org/mineflayer-
+   baritone via new pathfinder-compat.js shim) — biggest, riskiest change
+   this session; everything that moves goes through this now ──
+[ ] "follow" — keeps pace over normal terrain.
+[ ] "come here" / "go to X Y Z" / "navigate to <saved location>" — arrives
+    without getting stuck or throwing.
+[ ] Combat: melee approach, retreat at low HP, kiting/ranged (bow mode) —
+    confirm movement still works mid-fight, not just the attack action.
+[ ] "tunnel" / "mine this" / "dig this" — walks to target, digs correctly.
+[ ] Doors — opens closed doors/gates in path without getting stuck, vanilla
+    AND modded (relies on buildOpenableIds() feeding the new engine's
+    config.interactableBlocks correctly).
+[ ] "unstuck" — recovers when deliberately wedged.
+[ ] Lava/fire nearby — escape monitor still pulls Nilo away correctly.
+[ ] "wander" / autonomous exploration — doesn't get stuck or error silently
+    (watch console for [NAV]/[PHYSICS] log lines).
+[ ] Clone army: "clone N" spawns, ring formation holds, clones follow Nilo
+    and fight independently.
+[ ] Mirror mode ("learn"/"watch") — replayed dig/use_block/look events still
+    pathfind correctly.
+[ ] Crafting skills that walk to a crafting table/furnace still work.
+[ ] "collect nearest log" skill + farm auto-harvest (runFarm) — now use a
+    hand-rolled collectBlock() helper (movement.js) instead of the old
+    mineflayer-collectblock plugin, which turned out to be incompatible
+    with the new engine (constructs goals from its own bundled OLD
+    mineflayer-pathfinder, and calls a Movements method the new engine
+    doesn't have — would have thrown immediately if left wired in).
+[ ] Confirm modded blocks from your stateId data dump are still recognized
+    for pathing (passable vs solid). Both engines read the same
+    bot.registry, so the swap itself shouldn't change this — but this was
+    flagged as "doesn't work properly yet" even BEFORE the swap, so if
+    still broken, the bug is in registry-patch.js, not the pathfinder.
+
+── mineflayer-tool (equipForBlock) — not changed, flagged as a risk ──
+[ ] Confirm bot.tool.equipForBlock(block) (used by "mine this" and the new
+    collectBlock() helper) doesn't error. It has the same kind of old-
+    pathfinder dependency mineflayer-collectblock had, but only on a
+    craft/fetch-missing-tool code path Nilo's plain calls don't appear to
+    trigger — unconfirmed live either way.
+
+── Spectator server (mineflayer-spectator) ──
+[ ] Connect a real MC client to <nilo-host-ip>:25566, password nilo123 →
+    joins as spectator.
+[ ] /spectatortp → camera moves to Nilo.
+[ ] Chat as spectator → comes through as Nilo's own in-game chat.
+[ ] Reconnect Nilo → spectator server comes back on the same port instead of
+    silently dying (added an explicit close-old-before-start-new guard).
+
+── Command prefix (# / #nilo) — behavior change, not just a rename ──
+[ ] Plain chat containing a command-shaped word (e.g. "let's follow that
+    trail") does NOT trigger anything — goes to Letta as conversation.
+[ ] "#follow" / "#sit" / "#mine this" etc. DO trigger the command.
+[ ] "#nilo quit" / "#nilo trust <player>" / etc. still work.
+[ ] Discord: "#nilo ..." now required (used to be optional) — confirm it
+    still works prefixed AND that unprefixed Discord chat no longer
+    triggers commands.
+[ ] Discord "#status" / "#help" / "#server ..." / "#behavior ..." /
+    "#skill ..." — renamed from "!", confirm still functional.
+[ ] Local CLI (`nilo` command) and prizmo-system's terminal command box —
+    should NOT need "#" (deliberately exempted as dedicated command
+    consoles, not casual chat where accidental triggers are the concern).
 
 ────────────────────────────────────────────────────────
 IN PROGRESS
 ────────────────────────────────────────────────────────
 [ ] Nilo v2 — Python rewrite (learning-focused)
     User is learning to code. Guide, don't replace.
+
+[ ] Commit the uncommitted commands/index.js fix (session 15 finding):
+    the working version (live since the 01:01 restart) registers freyrCmd/
+    clonesCmd/mirror in quickHandlers/prefixHandlers — the committed version
+    (87d6243) never wired commands/freyr.js in at all, which is why "activate
+    freyr" silently did nothing while Letta improvised a fake confirmation.
+    `git status` still shows it as `M commands/index.js` — commit it before
+    a reset/checkout wipes the fix.
+
+[ ] Freyr command typo tolerance (session 15 finding): "freir return" (typo,
+    missing the 'y') bypassed commands/freyr.js entirely — it gates on a
+    literal `lower.includes('freyr')` — and fell through to Letta, which
+    fabricated "Looks like Freyr returned..." while the sword stayed out in
+    the world (UUID 3e076bfc..., bound 00:20:59, never actually recalled).
+    Fix: loosen the gate/regexes to also catch close misspellings ("freir",
+    "frey", "freyer") — e.g. a small Levenshtein check against "freyr" — so
+    a typo routes to the real command (or an explicit "didn't catch that")
+    instead of letting the LLM fabricate a plausible-sounding lie about
+    something that never happened.
+
+[~] Clone army — spawn copies of Nilo that summon/return Freyr Swords on a
+    shared toggle, teleport in near Nilo, and follow/fight like he does.
+    Built this session, NEEDS LIVE TEST + polish:
+      - clones.js: spawnClone/spawnClones/despawnAllClones — minimal bots
+        (pathfinder + armor-manager only, NO Letta/Discord/viewers/HUD —
+        too heavy for up to 20 connections). Username: NILO_CLONE<N>.
+      - teleportNearMaster(bot): on spawn, Nilo (OP level 4) runs
+        "/tp NILO_CLONEn <x> <y> <z>" to drop the clone 2-6 blocks from his
+        own position at a random angle — clones themselves are NOT OP'd so
+        they can't /tp themselves (only Nilo issues the command).
+      - startCloneBehavior(bot): self-contained follow+fight loop (own
+        cooldown map, NOT combat.js's shared `_cd` / NOT state.behaviorMode —
+        those are process-global singletons that 20 concurrent clones would
+        clobber). Fights nearest hostile within 16 blocks (melee only, no
+        ranged/totem/retreat logic — simpler than Nilo's full combatTick),
+        else follows MASTER (PrizmoElectric) at distance ~3. Reuses
+        isHostileMob/equipBestMeleeWeapon from combat.js (verified stateless
+        enough to share — DB lookups + per-bot inventory only).
+      - commands/clones.js: "cloneon"/"cloneoff" toggle clone mode;
+        "clone 1".."clone 20" spawns N clones (gated on clone mode active,
+        staggered 2.5s apart to avoid hammering the server's login);
+        "freyr on"/"freyr off" sets state.freyrCloneToggle, polled by every
+        clone every 4s (tickFreyr in clones.js) — summons if not out & has
+        the item, returns if out and toggle is off.
+      - Refactored freyr.js from module-level singletons (freyrUUID,
+        freyrStationary) to per-bot state (Map keyed by bot instance) —
+        REQUIRED so clones don't clobber each other's/Nilo's Freyr binding.
+        freyr.isStationary/getFreyrUUID are now (bot) => ... functions, not
+        getters — if you see `freyr.isStationary` or `freyr.freyrUUID` used
+        as bare properties anywhere, that's stale and needs `(bot)`.
+      - Extracted the Fabric/Forge login handshake from nilo.js into
+        registry-patch.installLoginHandshake(bot) so clones can reuse the
+        exact same reverse-engineered logic Nilo needs to connect to this
+        modded server (without it, the server likely rejects/desyncs them).
+      - Skin: each clone runs "/skin set NILO" on spawn (FabricTailor 2.1.2 —
+        confirmed via rcon the command syntax is "/skin set [URL|upload|player]";
+        the "player" form copies that player's CURRENT skin). Skin commands
+        always target the sender, so this can't be done via rcon/console on
+        the clone's behalf — each clone must issue it for itself. Untested
+        live (needs FabricTailor's skin_change_timer=60s cooldown to not be
+        an issue for fresh accounts — should be fine, no prior skin history).
+    [FIXED — session 14b] Clones never reached 'spawn' / never teleported:
+      Root cause #1: this server never sends `update_health` to freshly-
+      joined player connections (verified live — bot.health stayed
+      `undefined` 60s after join), so mineflayer's health-based 'spawn'
+      detection (lib/plugins/health.js, fires on first update_health with
+      health>0) NEVER emits for clones. Nilo doesn't notice because his
+      bot.entity/position arrive the same way clones' do — only the 'spawn'
+      *event* itself was missing. FIX: clones.js now uses
+      bot.once('forcedMove', ...) instead of bot.once('spawn', ...) — fires
+      on the very first position/teleport-confirm packet (which DOES always
+      arrive and is what populates bot.entity), then again on every later
+      forced teleport (e.g. our own /tp), so .once() still only fires once.
+      Root cause #2 (the "[48K blob data]" journal flood that was choking
+      the service): protodef's FullPacketParser does `console.log(e.stack)`
+      for EVERY PartialReadError — and a brand-new player joining this
+      heavily-modded server triggers thousands of those per second while the
+      giant declare_recipes/declare_commands/chunk packets stream in
+      (measured: 100K-380K log lines per ~30s, journald rate-limited them
+      all into "Suppressed N messages" — that's what "[48K blob data]" was).
+      FIX: pass `hideErrors: true` to mineflayer.createBot() for clones —
+      this sets noErrorLogging on the deserializer and kills the flood
+      entirely (re-tested: 23 total log lines for a full connect+spawn vs.
+      tens of thousands before). Our own bot.on('error', ...) still logs
+      concise one-line messages, so nothing useful is lost.
+      Verified live with a throwaway test bot: forcedMove fires within ~3s
+      of login with a valid bot.entity.position, installFreyrListeners runs
+      cleanly — the spawn handler chain (teleport, skin, Freyr poll,
+      behavior loop) should now actually execute for every clone.
+
+    [DONE — session 14b] Skin fixed — was using "/skin set NILO" which only
+      copies the NILO *account's* current server-side skin (default Steve;
+      Nilo's look is a viewer-only cosmetic swap, never applied via
+      FabricTailor). Now: api.js serves the real skin file
+      (nilo-assets/nilo-skin.png, the SerialDesignation_N-V2.png backup) at
+      http://192.168.1.100:3008/nilo-skin.png (exported as api.SKIN_URL),
+      added "192.168.1.100" to fabrictailor.json's texture_allowed_domains
+      + reloaded live via rcon "/fabrictailor config reload" (no MC restart
+      needed). Clones now run "/skin set <that URL>". Verified the URL
+      serves the PNG with correct content-type.
+
+    [DONE — session 14b] Follow chain fixed — clones now follow NILO (their
+      master) instead of PrizmoElectric directly: bot.players[BOT_USERNAME]
+      replaces bot.players[MASTER] in startCloneBehavior's GoalFollow target.
+      Forms a natural chain: PrizmoElectric → Nilo → clone army. Also added
+      a MAX_DIST_FROM_NILO=50 safety net in the same tick — if a clone ever
+      ends up >50 blocks from Nilo (lost, fell down a ravine, pathfinder gave
+      up), it calls teleportNearMaster(bot) again (10s cooldown) instead of
+      wandering off forever.
+
+    [FIXED — session 14c] "Clones fail to follow Nilo" — TWO causes found:
+      1. THE BIG ONE: clones never ran installEasyAuth(bot)! This server's
+         EasyAuth mod freezes/blinds any account until it /register's and
+         /login's — the clone "spawns" but literally cannot move, see
+         entities, or be /tp'd. Looks exactly like "fails to follow". Nilo
+         has always called installEasyAuth(bot) (nilo.js); clones now do too,
+         right after installLoginHandshake — same shared password
+         (NILO_PASSWORD env / 'nilo123' default; fine, throwaway accounts).
+      2. Clones never set up pathfinder Movements — they got mineflayer-
+         pathfinder's generic vanilla defaults, which misclassify modded
+         fences/walls as impassable and can't open most doors (Fabric door
+         executor is known broken — see installDoorOpener's comment). On
+         this heavily-modded terrain that means constant stuck-mid-path.
+         FIX: clones now call the exact same one-time spawn setup Nilo does
+         — applyServerBlockOverrides, buildOpenableIds, setMovements
+         (createMovements), installDoorOpener — all from movement.js. These
+         are cheap synchronous calls + one physicsTick listener; safe ×20.
+
+    [DONE — session 14c] "Inventory system" — added GET /api/clones to the
+      EXISTING api.js HTTP server (port 3008, already running for the HUD) —
+      returns each clone's name/position/health/inventory/armor as JSON.
+      Deliberately did NOT spin up a mineflayer-web-inventory instance per
+      clone (would mean up to 20 extra HTTP servers/ports just to show the
+      same data — real memory/CPU cost for near-zero benefit over one shared
+      JSON endpoint). buildClonesState() lazy-requires ./clones to dodge a
+      require cycle (clones.js needs api.SKIN_URL for the skin fix below).
+
+    [DONE — session 16] Real skins, formation/anti-stacking, Solsai-based
+      inventory management, HUD integration, "clone N" resizing — see
+      CHANGELOG 2026-06-07 (session 16) for full detail. Resolves several
+      items from the STILL-TO-DO list below:
+      - Skin: confirmed live — "/skin set upload slim <server-path>" (NOT
+        the URL form, which silently fails on a LAN-only bridge) applies
+        Nilo's real skin (SerialDesignation_N-V2.png) to every clone,
+        texture hash verified to match.
+      - Follow loop replaced: GoalFollow (converged on one point, clones
+        stacked "inside each other") -> stable per-index ring formation +
+        mutual personal-space avoidance. Verified spread-out (~1.75-8 blocks
+        between clones across a 6-clone test).
+      - Freyr Sword + food now distributed automatically and instantly via
+        Solsai's /item-transfer (server-authoritative inventory-to-inventory
+        move) — no more manual supply, no toss/tp/walk/pickup round-trip.
+        Still gated on Nilo actually carrying spares (by design).
+      - "cloneoff" / despawnAllClones / new despawnClones (partial "clone N"
+        shrink) all retract Freyr Swords before disconnecting — confirmed no
+        stranded sword entities left behind.
+      - HUD: prizmo-system now shows correct mode-colored ESP + inventory
+        for clones too (was always defaulting to 'idle'/wrong color since
+        nothing pushed their mode to Solsai's /bot-mode).
+
+    STILL TO DO / VERIFY LIVE:
+      - Confirm "/tp NILO_CLONEn x y z" actually lands the clone near Nilo —
+        depends on Nilo's chat->command bridge accepting "/tp" with a
+        non-master target name (it's used elsewhere for "tp <a> to <b>" so
+        should work, but never tested for a freshly-joined unspawned bot).
+      - Clone fight loop is intentionally simple (melee-only, no
+        kiting/retreat/totem/bow). If "doing what nilo does" should include
+        ranged combat or guard-mode patrol, that's a follow-up expansion.
+      - "clone 20" = 20 simultaneous extra connections to the same server —
+        confirm the server/network/machine handles that load (RAM, server
+        player-slot limits, ISP/router NAT for 20 sockets). Consider
+        starting with "clone 2" or "clone 3" first.
+      - Confirm clones don't confuse Nilo's own logic: Nilo treats any
+        non-NILO chat as a regular player (join/leave messages, proximity
+        behaviors, trust checks) — clones don't chat, but verify Nilo
+        doesn't try to greet/follow/attack them on spawn.
+      - Confirm the 4s Freyr poll doesn't spam packets once a clone's sword
+        is already out/away (summonFreyr/findFreyrEntity guard on UUID sync —
+        verify the guard actually prevents repeat equip+activateItem calls).
+      - Live-verify distributeFood(): seed Nilo with >10 spare bread (he
+        currently has ~70 across two stacks) and confirm a clone whose bread
+        has dropped to <=10 gets topped up to ~16 within one 15s poll cycle
+        (check via /api/clones or a direct inventory read).
 
 ────────────────────────────────────────────────────────
 NEEDS LIVE TEST
@@ -55,38 +324,76 @@ NEEDS LIVE TEST
     on all reconnects. Ground truth correcting 1000-1077 mismatches/session.
 
 ────────────────────────────────────────────────────────
+INFRASTRUCTURE
+────────────────────────────────────────────────────────
+[x] Letta on PostgreSQL — complete. letta.service + postgresql.service both
+    enabled at boot. nilo.service depends on letta.service.
+    Agent: agent-75ce7db5-acff-4c48-a59f-94034e00b6aa
+    ⚠ If Letta agent is ever lost (DB wipe, new install), recreate via:
+      POST /v1/agents/ with model openai-proxy/cyankiwi/LFM2-8B-A1B-AWQ-4bit,
+      context_window 4096, max_tokens 300, then update config.js LETTA_URL.
+
+[x] vLLM tool parser fixed — lfm2 (was mistral, wrong for LFM2 model).
+    No chat-template override. max-model-len: 4096.
+
+[ ] DuckDNS — subdomain: prizmoprominence.duckdns.org
+    Waiting for user to create account + provide token.
+    Then: install update script + systemd timer.
+
+[ ] Self-bot Discord — "&nilo" trigger in any channel, responds using user's account.
+    Library: discord.js-selfbot-v13. Separate service from Nilo bot.
+    Calls local Letta, posts reply as user. Used only on own server (low ToS risk).
+    Waiting for user to provide Discord user token.
+
+[ ] Letta memory blocks — agent currently has none. Consider adding:
+    - "human" block: facts about PrizmoElectric (Prominence 2 player, etc.)
+    - "persona" block: Nilo's lore/backstory in the world
+
+────────────────────────────────────────────────────────
 FEATURES TO BUILD
 ────────────────────────────────────────────────────────
 ── Mirror mode (recording) ─────────────────────────────────────────────────
 
-[ ] Server-side Fabric mod — mirror feature for recording purposes.
-    Intercepts C2S packets from the player: PlayerMoveC2SPacket (position +
-    look), PlayerActionC2SPacket (dig start/stop), PlayerInteractBlockC2SPacket,
-    PlayerInteractEntityC2SPacket, PlayerInteractItemC2SPacket.
-    Forwards timestamped packet stream to Nilo over WebSocket.
-    Nilo replays them as bot actions.
-    No client mod required. Packet fidelity sufficient for recording.
+[x] Fabric mod v1.3.0 (zote-context-mod) — C2S packet capture COMPLETE:
+    MirrorCaptureMixin captures 7 event types for PrizmoElectric.
+    GET /mirror-events drains buffer → JSON array. Deployed to mods folder.
+    ⚠ MC server restart required to activate.
+
+[x] Node.js framework (mirror.js + commands/mirror.js):
+    watch mode, learn mode, recording, disconnect save, collision-safe placement.
+
+[ ] Node.js spatial mirror — NEEDS REWRITE:
+    Current impl just does GoalFollow + event poll. User wants a SPATIAL MIRROR:
+    - Mirror plane at player's gaze target (raycasted block face).
+    - Nilo's target position = reflection of player across that plane.
+    - Nilo's look = reflected look direction (yaw/pitch math).
+    - Crouch: bot.on('entityCrouch'/'entityUncrouch') → bot.setControlState('sneak').
+    - Arm swing: bot.on('entitySwingArm') → bot.swingArm().
+    - OPEN QUESTION: is mirror plane FIXED (locked on "mirror me") or DYNAMIC
+      (updates as player's gaze moves)? Must ask user next session.
 
 ── Modded block auto-recognition ───────────────────────────────────────────
 
     3 layers are DONE: blockUpdate learner (L1), proximity learner (L2),
     findBlocksByName raw scan (L3). blockname command = manual escape hatch.
 
-[ ] Block knowledge from digging — ground truth learning (no guessing).
-    When Nilo digs a block: record {stateId, block_name, held_item, success}
-    to nilo.db. On success this is definitive — the stateId is confirmed,
-    the name is confirmed, the correct tool is confirmed. Feeds back into
-    the registry so the auto-mapper can anchor its gap analysis around
-    known-correct entries rather than pure heuristics.
+[x] Block knowledge from digging — (session 11) diggingCompleted event records
+    stateId → blockName to nilo.db with confidence 'ground_truth'. Only
+    overwrites low-confidence/auto entries. Never clobbers manual overrides.
+
+[x] Item recognition — already done via registry-patch.js loadAllItemsCache()
+    + getModdedItemName(). Reads nilo-assets/all-items-cache.json at startup.
+    resolveItemName() checks modded registry first, then displayName/name.
 
 ── World memory ─────────────────────────────────────────────────────────────
 
-[ ] Persistent location index — Nilo forgets everything spatial between
-    sessions. Add a locations table to nilo.db: {name, x, y, z, dimension,
-    last_seen, notes}. Populate it as Nilo explores (ore veins found during
-    scan, structures visited, graves collected, etc.). Commands: "remember
-    this place as X", "where is X?", "nearest X". Lets Nilo answer location
-    questions from memory instead of scanning every time.
+[x] Persistent location index — (session 11) DB table already existed.
+    Commands added to navigation.js:
+    "remember this as X" → saves current pos with label
+    "where is X?" → looks up and reports location + distance
+    "go to X" / "navigate to X" → pathfinds to saved location
+    "list locations" → lists all saved locations
+    "nearest saved location" → finds closest saved spot
 
 ── Skill refinement ─────────────────────────────────────────────────────────
 
@@ -138,6 +445,11 @@ FEATURES TO BUILD
     Script: build-mod-textures.js. Re-run with server online to update.
     Remaining: Chipped (complex models >2 elements), FarmersDelight, Vinery.
 
+[x] Mobile viewer CPU fix — COMPLETE (session 11).
+    SwiftShader was burning 1189% CPU. Fixed by injecting rAF throttler
+    into headless Chrome page: 3fps active, 1fps idle (no clients).
+    window.__setStreamRate(ms) called from captureLoop() in mobile-stream.js.
+
 [x] Mobile viewer — COMPLETE (session 10).
     Port 3006: Puppeteer screenshots port 3009 (first-person, viewDistance:4)
     and streams JPEG frames at 3fps via WebSocket. Phone shows live image.
@@ -165,10 +477,6 @@ KNOWN GAPS
 [x] Passable blocks named 'air' invisible to gaze/scan — fixed: 772 DB entries
     renamed from 'air' → 'passable'. Use blockname <sid> <mod:name> to assign
     proper names to specific blocks.
-
-[ ] Stone wrongly marked passable — block teaching blindly trusted the gaze
-    result and wrote stone = passable to the DB. Need a confirmation step or
-    sanity check before writing solid blocks as passable.
 
 ────────────────────────────────────────────────────────
 HOUSEKEEPING

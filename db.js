@@ -63,6 +63,18 @@ db.exec(`
     taught_by  TEXT,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
   );
+
+  CREATE TABLE IF NOT EXISTS checkpoints (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    server     TEXT NOT NULL,
+    dimension  TEXT NOT NULL,
+    label      TEXT NOT NULL COLLATE NOCASE,
+    x          REAL NOT NULL,
+    y          REAL NOT NULL,
+    z          REAL NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    UNIQUE (server, dimension, label)
+  );
 `);
 
 // One-time migration: import manual overrides from modded-state-ids.json on first run

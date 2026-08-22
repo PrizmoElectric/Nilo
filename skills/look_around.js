@@ -1,7 +1,7 @@
 // Skill: look_around
 // Description: slowly pan around to observe the surroundings (full 360)
 // Handcrafted: true
-const { Movements, goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { Movements, goals: { GoalBlock, GoalNear } } = require('../pathfinder-compat');
 const Vec3 = require('vec3');
 
 async function niloSkill(bot) {

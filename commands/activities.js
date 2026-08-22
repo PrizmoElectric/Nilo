@@ -1,7 +1,7 @@
 const { collectGrave, startFishing, runFarm, buildSimpleHouse, startDance, sleepInBed, writeSign } = require('../activities');
 const { startTunnel } = require('../skills/tunnel');
 const { cmd } = require('./_util');
-const { goals: { GoalNear } } = require('mineflayer-pathfinder');
+const { goals: { GoalNear } } = require('../pathfinder-compat');
 const { createMovements } = require('../movement');
 const { getPlayerGazeTarget } = require('../gaze');
 const state = require('../state');

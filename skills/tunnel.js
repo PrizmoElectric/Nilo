@@ -12,7 +12,7 @@
 //   "stop tunneling", "stop digging", "stop mining"
 
 const Vec3  = require('vec3');
-const { goals: { GoalBlock } } = require('mineflayer-pathfinder');
+const { goals: { GoalBlock } } = require('../pathfinder-compat');
 const state = require('../state');
 const { setBehavior, clearBehavior } = require('../behavior');
 const { createMovements } = require('../movement');

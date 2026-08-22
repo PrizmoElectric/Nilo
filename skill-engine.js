@@ -104,7 +104,7 @@ Write a single async JavaScript function that accomplishes the task.
 STRICT RULES:
 - Signature must be: async function niloSkill(bot) {
 - These identifiers are already in scope — do NOT require them:
-    GoalBlock(x,y,z)   GoalNear(x,y,z,range)   Vec3(x,y,z)   Movements
+    GoalBlock(x,y,z)   GoalNear(x,y,z,range)   Vec3(x,y,z)   Movements   collectBlock(bot,block)
 - Use these bot APIs only:
     bot.entity.position           Vec3 {x,y,z}
     bot.inventory.items()         [{name,count,type}]
@@ -116,7 +116,7 @@ STRICT RULES:
     bot.blockAt(vec3)             Block
     bot.pathfinder.goto(goal)     async navigate
     bot.pathfinder.setMovements(m)
-    bot.collectBlock.collect(block)   async mine/collect
+    collectBlock(bot, block)      async walk to + mine a block
     bot.chat(text)                say in chat (≤2 sentences)
     bot.equip(item,slot)          async equip
     bot.attack(entity)
@@ -142,7 +142,8 @@ async function niloSkill(bot) {`;
 function executeBody(bot, bodyCode) {
   // Wrap body in a full function with injected scope
   const src = `
-    const { Movements, goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+    const { Movements, goals: { GoalBlock, GoalNear } } = require('./pathfinder-compat');
+    const { collectBlock } = require('./movement');
     const Vec3 = require('vec3');
     async function niloSkill(bot) {
       ${bodyCode}
@@ -211,7 +212,7 @@ function saveSkill(skillName, description, bodyCode) {
     `// Skill: ${skillName}`,
     `// Description: ${description}`,
     `// Generated: ${new Date().toISOString()}`,
-    `const { Movements, goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');`,
+    `const { Movements, goals: { GoalBlock, GoalNear } } = require('./pathfinder-compat');`,
     `const Vec3 = require('vec3');`,
     ``,
     `async function niloSkill(bot) {`,

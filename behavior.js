@@ -1,8 +1,9 @@
 // behavior.js — behavior mode state management
 
 const state  = require('./state');
+const { saveBehavior } = require('./persist');
 
-// mode: idle | follow | wander | sit | attack | assist | guard | defensive | passive | fishing | bow | building | dance | tunneling
+// mode: idle | follow | wander | sit | attack | assist | guard | shield | defensive | passive | fishing | bow | building | dance | tunneling
 
 function clearBehavior(bot) {
   if (state.behaviorInterval) {
@@ -14,8 +15,8 @@ function clearBehavior(bot) {
     state.behaviorInterval = null;
   }
   bot.pathfinder.setGoal(null);
+  state.isSneaking = false; // reset before clearControlStates so the patched version doesn't re-apply sneak
   bot.clearControlStates();
-  if (state.isSneaking) bot.setControlState('sneak', true);
   state.behaviorOwner = null;
 }
 
@@ -35,6 +36,7 @@ function setBehavior(bot, mode, username) {
   clearBehavior(bot);
   state.behaviorMode = mode;
   state.behaviorOwner = username || null;
+  saveBehavior(mode, username);
   console.log(`[NILO] Behavior -> ${mode}${username ? ` (for ${username})` : ''}`);
   return true;
 }

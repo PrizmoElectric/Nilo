@@ -23,6 +23,75 @@ let discovered      = new Set(); // state IDs seen in chunk palettes
 let resolved        = {};        // stateId → {name, confidence}
 let manualOverrides = {};        // stateId → name
 let vanillaMax      = 0;
+let allBlocksCache  = null;     // stateId → name, pre-loaded from nilo-assets/all-blocks-cache.json
+let allBlocksCacheByName = null; // reverse index: name → [stateId, ...], built lazily from allBlocksCache
+let allItemsCache   = null;     // rawId   → name, pre-loaded from nilo-assets/all-items-cache.json
+let moddedItemById  = {};       // itemId (integer) → name, captured from Fabric login registry sync
+let passableBlocksCache = null; // Set<name> — blocks with thin-element models (cross/plant = no collision)
+let allEntitiesCache    = null; // rawId → entityTypeName, from nilo-assets/all-entities-cache.json
+
+// Loaded once at install time. Covers all 593k+ modded stateIds from the last
+// /all-blocks snapshot. Used as fallback when a block isn't in DB or resolved.
+function loadAllBlocksCache() {
+  const cachePath = path.join(__dirname, 'nilo-assets', 'all-blocks-cache.json');
+  try {
+    const raw = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    allBlocksCache = {};
+    let count = 0;
+    for (const [id, name] of Object.entries(raw)) {
+      const n = parseInt(id);
+      if (n >= 24135) { allBlocksCache[n] = name; count++; }
+    }
+    console.log(`[REGISTRY] All-blocks cache loaded: ${count} modded stateIds`);
+  } catch (e) {
+    allBlocksCache = {};
+    console.warn('[REGISTRY] nilo-assets/all-blocks-cache.json not found — block names rely on DB only');
+  }
+}
+
+// Lazily build and return name→[stateIds] reverse index of allBlocksCache.
+function getCacheByName() {
+  if (allBlocksCacheByName) return allBlocksCacheByName;
+  allBlocksCacheByName = {};
+  for (const [idStr, name] of Object.entries(allBlocksCache || {})) {
+    if (!allBlocksCacheByName[name]) allBlocksCacheByName[name] = [];
+    allBlocksCacheByName[name].push(parseInt(idStr));
+  }
+  return allBlocksCacheByName;
+}
+
+function loadAllItemsCache() {
+  const cachePath = path.join(__dirname, 'nilo-assets', 'all-items-cache.json');
+  try {
+    allItemsCache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    console.log(`[REGISTRY] All-items cache loaded: ${Object.keys(allItemsCache).length} items`);
+  } catch (e) {
+    allItemsCache = {};
+  }
+}
+
+function loadAllEntitiesCache() {
+  const cachePath = path.join(__dirname, 'nilo-assets', 'all-entities-cache.json');
+  try {
+    allEntitiesCache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    console.log(`[REGISTRY] All-entities cache loaded: ${Object.keys(allEntitiesCache).length} entity types`);
+  } catch (e) {
+    allEntitiesCache = {};
+    console.warn('[REGISTRY] nilo-assets/all-entities-cache.json not found — run: node scripts/fetch-entity-cache.js');
+  }
+}
+
+function loadPassableBlocksCache() {
+  const cachePath = path.join(__dirname, 'nilo-assets', 'passable-blocks-cache.json');
+  try {
+    const names = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    passableBlocksCache = new Set(names);
+    console.log(`[REGISTRY] Passable-blocks cache loaded: ${passableBlocksCache.size} passable block types`);
+  } catch (e) {
+    passableBlocksCache = new Set();
+    console.warn('[REGISTRY] passable-blocks-cache.json not found — using keyword fallback only');
+  }
+}
 
 // ── Block physics ─────────────────────────────────────────────────────────────
 // Resolution order: blocks DB table → BLOCK_PHYSICS fallback → heuristic.
@@ -77,6 +146,36 @@ function getPhysicsForName(name) {
   // Modded blocks (contain ':') default to solid — wrong physics is less harmful than being invisible.
   // The player can override with "X is passable" teaching.
   if (name.includes(':')) {
+    // Primary: passable-blocks-cache.json derived from prominence-blockstates.json model geometry.
+    // Blocks with thin cross-shaped elements (minDim < 1 unit) have no collision → passable.
+    if (passableBlocksCache?.has(name)) {
+      return { boundingBox: 'empty', transparent: true, shapes: [] };
+    }
+
+    // Secondary keyword fallback — covers two cases:
+    // (a) blocks classified as "SOLID" by geometry analysis because they have a full-cube
+    //     visual model but have no actual physics collision in-game (decorative plants);
+    // (b) blocks with no elements (parent-model inheritance) that geometry can't classify.
+    const nl = name.toLowerCase();
+    const isPlantKeyword =
+      !nl.includes('_block') && !nl.includes('petrified') && !nl.includes('potted_') &&
+      !nl.includes('_log') && !nl.includes('_plank') && !nl.includes('_ore') &&
+      !nl.includes('flower_pot') && !nl.includes('_candle') && (
+      nl.includes('flower')     ||   // coneflower, mystical_flower, magnolia_flowers…
+      nl.includes('_bloom')     ||   // hyacinth_bloom, glistering_bloom…
+      nl.includes('_blossom')   ||
+      nl.includes('clover')     ||   // clover ground plants
+      nl.includes('leaf_pile')  ||   // carpet-like leaf accumulations
+      nl.includes('_fern')      ||   // glistering_fern, cave ferns
+      nl.includes('_sprout')    ||
+      nl.includes('_lichen')    ||
+      nl.includes('hyacinth')   ||
+      nl.includes('magnolia_flower')
+    );
+    if (isPlantKeyword) {
+      return { boundingBox: 'empty', transparent: true, shapes: [] };
+    }
+
     return {
       boundingBox: 'block',
       transparent: name.includes('glass'),
@@ -226,12 +325,52 @@ function handleLoginRegistrySync(packetData) {
       .filter(([name]) => !name.startsWith('minecraft:'))
       .map(([name, itemId]) => ({ name, itemId }))
       .sort((a, b) => a.itemId - b.itemId);
+    for (const { name, itemId } of moddedItems) moddedItemById[itemId] = name;
     console.log(`[REGISTRY] Login sync: ${moddedItems.length} modded item names`);
   }
 
   if (!blockKey) {
     console.warn('[REGISTRY] Login sync: no block registry found. Keys:', Object.keys(data).join(', ') || '(none parsed)');
   }
+}
+
+// Reverse-engineered Fabric/Forge login handshake — required for ANY bot
+// connection (Nilo or a clone) to this heavily-modded server to succeed.
+// minecraft-protocol auto-responds to all login_plugin_request with null,
+// which causes duplicate responses, so we remove that listener and answer
+// each known channel explicitly.
+function installLoginHandshake(bot) {
+  bot._client.removeAllListeners('login_plugin_request');
+
+  bot._client.on('login_plugin_request', (packet) => {
+    const bytes = packet.data?.length ?? 0;
+    const hex   = bytes <= 16 ? (packet.data?.toString('hex') ?? '') : '';
+    console.log(`[HANDSHAKE] (${bot.username}) login_plugin_request: ${packet.channel} (${bytes}b${hex ? ' 0x' + hex : ''})`);
+
+    let responseData = null;
+
+    if (packet.channel === 'fabric-networking-api-v1:early_registration') {
+      responseData = buildEarlyRegistrationResponse(packet.data ?? Buffer.alloc(1));
+    } else if (REGISTRY_SYNC_CHANNELS.some(ch => ch === packet.channel)) {
+      handleLoginRegistrySync(packet.data ?? Buffer.alloc(0));
+      responseData = Buffer.from([0x01]);
+    } else if (packet.channel === 'owo:handshake') {
+      responseData = Buffer.from([0x00, 0x01]);
+    } else if (packet.channel === 'forgeconfigapiport:sync_configs') {
+      responseData = Buffer.from([0x00]);
+    } else if (packet.channel.startsWith('forgeconfigapiport:')) {
+      responseData = Buffer.from([0x00]);
+    } else if (packet.channel === 'fabric:custom_ingredient_sync') {
+      responseData = Buffer.from([0x01, 0x00]);
+    } else if (packet.channel.startsWith('fabric:')) {
+      responseData = Buffer.from([0x00]);
+    }
+
+    bot._client.write('login_plugin_response', {
+      messageId: packet.messageId,
+      data: responseData,
+    });
+  });
 }
 
 // ── Fabric registry sync parser ───────────────────────────────────────────────
@@ -340,6 +479,22 @@ function resolveMapping(bot) {
     if (!resolved[id] || resolved[id].name !== info.name) { resolved[id] = info; patched++; }
   }
 
+  // Fill in any discovered IDs not covered by gap analysis using the all-blocks cache.
+  // Cache entries use confidence 'cache' — overridden by ground_truth but not by gap analysis.
+  if (allBlocksCache) {
+    let cachePatched = 0;
+    for (const id of unknownIds) {
+      if (manualOverrides[id]) continue;
+      if (resolved[id]?.confidence === 'high' || resolved[id]?.confidence === 'ground_truth' || resolved[id]?.confidence === 'cache') continue;
+      const cacheName = allBlocksCache[id];
+      if (cacheName) { resolved[id] = { name: cacheName, confidence: 'cache' }; cachePatched++; }
+    }
+    if (cachePatched > 0) {
+      patched += cachePatched;
+      console.log(`[REGISTRY] Applied ${cachePatched} names from all-blocks cache`);
+    }
+  }
+
   if (patched > 0) {
     logUncertain(uncertain);
     saveMapping();
@@ -385,12 +540,45 @@ function patchRegistryFromResolved(bot) {
       boundingBox:  physics.boundingBox,
     };
 
+    if (physics.boundingBox === 'empty' && name.includes(':')) {
+      console.log(`[PHYSICS] passable: ${name} (stateIds: ${sorted.slice(0,3).join(',')}${sorted.length > 3 ? '...' : ''})`);
+    }
+
     for (const id of sorted) {
       if (manualIds.has(id) || resolved[id]) {
         bot.registry.blocksByStateId[id] = descriptor;
       } else if (!bot.registry.blocksByStateId[id]) {
         bot.registry.blocksByStateId[id] = descriptor;
       }
+    }
+
+    // Fill all remaining states from allBlocksCache for this block name.
+    // Without this, unseen door states get type=undefined and the wrong boundingBox,
+    // causing the pathfinder and physics engine to disagree on passability.
+    if (allBlocksCache) {
+      const cacheIds = getCacheByName()[name];
+      if (cacheIds) {
+        for (const cacheId of cacheIds) {
+          if (!bot.registry.blocksByStateId[cacheId]) {
+            bot.registry.blocksByStateId[cacheId] = descriptor;
+          }
+        }
+      }
+    }
+
+    // Modded doors/gates must be physically passable in the client registry.
+    // With states:[] we cannot distinguish open vs closed per-stateId, so we
+    // mark ALL states as empty-boundingBox. The proactive door opener (physicsTick)
+    // activates closed doors before the bot physically arrives. Without this,
+    // mineflayer's own physics engine blocks the bot even when the door is open.
+    const nl = name.toLowerCase();
+    const isModdedDoor = name.includes(':') && (
+      (nl.includes('_door') && !nl.includes('trapdoor') && !nl.includes('iron_door')) ||
+      (nl.includes('_gate') && !nl.includes('iron_gate'))
+    );
+    if (isModdedDoor) {
+      descriptor.boundingBox = 'empty';
+      descriptor.shapes      = [];
     }
 
     if (!bot.registry.blocksByName[name]) bot.registry.blocksByName[name] = descriptor;
@@ -484,6 +672,7 @@ function getResolved()   { return resolved; }
 function getModdedBlockName(stateId) {
   if (manualOverrides[stateId]) return manualOverrides[stateId];
   if (resolved[stateId])        return resolved[stateId].name;
+  if (allBlocksCache?.[stateId]) return allBlocksCache[stateId];
   return null;
 }
 
@@ -648,6 +837,10 @@ function loadModBlockList() {
 
 function installRegistryPatch(bot) {
   loadFromDB();
+  loadAllBlocksCache();
+  loadAllItemsCache();
+  loadAllEntitiesCache();
+  loadPassableBlocksCache();
 
   // Fabric registry sync (play-phase) — catches servers that do send block registry
   bot._client.on('custom_payload', (packet) => {
@@ -663,6 +856,15 @@ function installRegistryPatch(bot) {
       .map(([name, blockId]) => ({ name, blockId }))
       .sort((a, b) => a.blockId - b.blockId);
     console.log(`[REGISTRY] Captured ${moddedBlocks.length} modded block names from ${blockKey}`);
+    // Also capture item registry if present
+    const itemKey = Object.keys(registries).find(k => k.includes('item'));
+    if (itemKey) {
+      let itemCount = 0;
+      for (const [name, itemId] of Object.entries(registries[itemKey])) {
+        if (!name.startsWith('minecraft:')) { moddedItemById[itemId] = name; itemCount++; }
+      }
+      if (itemCount) console.log(`[REGISTRY] Captured ${itemCount} modded item names`);
+    }
   });
 
   bot.once('spawn', () => {
@@ -703,4 +905,26 @@ function installRegistryPatch(bot) {
   console.log('[REGISTRY] Registry patch installed — waiting for Fabric sync + spawn');
 }
 
-module.exports = { installRegistryPatch, installBlockUpdateLearner, installProximityLearner, findBlocksByName, getModdedBlockName, getConfidence, setManualOverride, getStateIdsByName, setManualBlockPhysics, buildEarlyRegistrationResponse, handleLoginRegistrySync, REGISTRY_SYNC_CHANNELS, applyGroundTruth, getDiscovered, getResolved };
+function getModdedItemName(itemId) {
+  return moddedItemById[itemId] || allItemsCache?.[String(itemId)] || null;
+}
+
+// Returns {name, group, hostile} for a given numeric entity type ID, or null.
+// "group" is Mojang's own SpawnGroup (monster/creature/ambient/...) — ground truth
+// fetched server-side via Solsai /all-entities. "hostile" = group === 'monster'.
+function getEntityInfo(entityTypeId) {
+  return allEntitiesCache?.[String(entityTypeId)] ?? null;
+}
+
+function getModdedEntityName(entityTypeId) {
+  return getEntityInfo(entityTypeId)?.name ?? null;
+}
+
+// Ground-truth hostility for any entity type (vanilla or modded), from Mojang's
+// own SpawnGroup. Returns null if the cache has no entry (caller should fall back).
+function isModdedEntityHostile(entityTypeId) {
+  const info = getEntityInfo(entityTypeId);
+  return info ? info.hostile : null;
+}
+
+module.exports = { installRegistryPatch, installBlockUpdateLearner, installProximityLearner, findBlocksByName, getModdedBlockName, getModdedItemName, getModdedEntityName, getEntityInfo, isModdedEntityHostile, getConfidence, setManualOverride, getStateIdsByName, setManualBlockPhysics, buildEarlyRegistrationResponse, handleLoginRegistrySync, installLoginHandshake, REGISTRY_SYNC_CHANNELS, applyGroundTruth, getDiscovered, getResolved };

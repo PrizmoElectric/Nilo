@@ -2,7 +2,7 @@
 // Description: guard current position, attacking nearby hostile mobs using combatTick autonomy
 // Handcrafted: true
 
-const { goals: { GoalBlock } } = require('mineflayer-pathfinder');
+const { goals: { GoalBlock } } = require('../pathfinder-compat');
 const state = require('../state');
 const { setBehavior } = require('../behavior');
 const { createMovements } = require('../movement');

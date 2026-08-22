@@ -1,7 +1,7 @@
 // Skill: crouch_stand
 // Description: crouch for 2 seconds then stand up
 // Handcrafted: true
-const { Movements, goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { Movements, goals: { GoalBlock, GoalNear } } = require('../pathfinder-compat');
 const Vec3 = require('vec3');
 
 async function niloSkill(bot) {

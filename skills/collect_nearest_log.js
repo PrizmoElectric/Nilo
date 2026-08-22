@@ -3,6 +3,8 @@
 // Handcrafted: true
 
 async function niloSkill(bot) {
+  const { collectBlock } = require('../movement');
+
   const logIds = Object.keys(bot.registry.blocksByName)
     .filter(n => n.endsWith('_log') || n === 'log')
     .map(n => bot.registry.blocksByName[n].id);
@@ -13,7 +15,7 @@ async function niloSkill(bot) {
   if (!block) throw new Error('No log found within 32 blocks');
 
   bot.chat(`Collecting ${block.name}...`);
-  await bot.collectBlock.collect(block);
+  await collectBlock(bot, block);
   return `collected ${block.name}`;
 }
 

@@ -1,0 +1,3177 @@
+{
+  "0": {
+    "name": "minecraft:allay",
+    "group": "creature",
+    "hostile": false
+  },
+  "1": {
+    "name": "minecraft:area_effect_cloud",
+    "group": "misc",
+    "hostile": false
+  },
+  "2": {
+    "name": "minecraft:armor_stand",
+    "group": "misc",
+    "hostile": false
+  },
+  "3": {
+    "name": "minecraft:arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "4": {
+    "name": "minecraft:axolotl",
+    "group": "axolotls",
+    "hostile": false
+  },
+  "5": {
+    "name": "minecraft:bat",
+    "group": "ambient",
+    "hostile": false
+  },
+  "6": {
+    "name": "minecraft:bee",
+    "group": "creature",
+    "hostile": false
+  },
+  "7": {
+    "name": "minecraft:blaze",
+    "group": "monster",
+    "hostile": true
+  },
+  "8": {
+    "name": "minecraft:block_display",
+    "group": "misc",
+    "hostile": false
+  },
+  "9": {
+    "name": "minecraft:boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "10": {
+    "name": "minecraft:camel",
+    "group": "creature",
+    "hostile": false
+  },
+  "11": {
+    "name": "minecraft:cat",
+    "group": "creature",
+    "hostile": false
+  },
+  "12": {
+    "name": "minecraft:cave_spider",
+    "group": "monster",
+    "hostile": true
+  },
+  "13": {
+    "name": "minecraft:chest_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "14": {
+    "name": "minecraft:chest_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "15": {
+    "name": "minecraft:chicken",
+    "group": "creature",
+    "hostile": false
+  },
+  "16": {
+    "name": "minecraft:cod",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "17": {
+    "name": "minecraft:command_block_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "18": {
+    "name": "minecraft:cow",
+    "group": "creature",
+    "hostile": false
+  },
+  "19": {
+    "name": "minecraft:creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "20": {
+    "name": "minecraft:dolphin",
+    "group": "water_creature",
+    "hostile": false
+  },
+  "21": {
+    "name": "minecraft:donkey",
+    "group": "creature",
+    "hostile": false
+  },
+  "22": {
+    "name": "minecraft:dragon_fireball",
+    "group": "misc",
+    "hostile": false
+  },
+  "23": {
+    "name": "minecraft:drowned",
+    "group": "monster",
+    "hostile": true
+  },
+  "24": {
+    "name": "minecraft:egg",
+    "group": "misc",
+    "hostile": false
+  },
+  "25": {
+    "name": "minecraft:elder_guardian",
+    "group": "monster",
+    "hostile": true
+  },
+  "26": {
+    "name": "minecraft:end_crystal",
+    "group": "misc",
+    "hostile": false
+  },
+  "27": {
+    "name": "minecraft:ender_dragon",
+    "group": "monster",
+    "hostile": true
+  },
+  "28": {
+    "name": "minecraft:ender_pearl",
+    "group": "misc",
+    "hostile": false
+  },
+  "29": {
+    "name": "minecraft:enderman",
+    "group": "monster",
+    "hostile": true
+  },
+  "30": {
+    "name": "minecraft:endermite",
+    "group": "monster",
+    "hostile": true
+  },
+  "31": {
+    "name": "minecraft:evoker",
+    "group": "monster",
+    "hostile": true
+  },
+  "32": {
+    "name": "minecraft:evoker_fangs",
+    "group": "misc",
+    "hostile": false
+  },
+  "33": {
+    "name": "minecraft:experience_bottle",
+    "group": "misc",
+    "hostile": false
+  },
+  "34": {
+    "name": "minecraft:experience_orb",
+    "group": "misc",
+    "hostile": false
+  },
+  "35": {
+    "name": "minecraft:eye_of_ender",
+    "group": "misc",
+    "hostile": false
+  },
+  "36": {
+    "name": "minecraft:falling_block",
+    "group": "misc",
+    "hostile": false
+  },
+  "37": {
+    "name": "minecraft:firework_rocket",
+    "group": "misc",
+    "hostile": false
+  },
+  "38": {
+    "name": "minecraft:fox",
+    "group": "creature",
+    "hostile": false
+  },
+  "39": {
+    "name": "minecraft:frog",
+    "group": "creature",
+    "hostile": false
+  },
+  "40": {
+    "name": "minecraft:furnace_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "41": {
+    "name": "minecraft:ghast",
+    "group": "monster",
+    "hostile": true
+  },
+  "42": {
+    "name": "minecraft:giant",
+    "group": "monster",
+    "hostile": true
+  },
+  "43": {
+    "name": "minecraft:glow_item_frame",
+    "group": "misc",
+    "hostile": false
+  },
+  "44": {
+    "name": "minecraft:glow_squid",
+    "group": "underground_water_creature",
+    "hostile": false
+  },
+  "45": {
+    "name": "minecraft:goat",
+    "group": "creature",
+    "hostile": false
+  },
+  "46": {
+    "name": "minecraft:guardian",
+    "group": "monster",
+    "hostile": true
+  },
+  "47": {
+    "name": "minecraft:hoglin",
+    "group": "monster",
+    "hostile": true
+  },
+  "48": {
+    "name": "minecraft:hopper_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "49": {
+    "name": "minecraft:horse",
+    "group": "creature",
+    "hostile": false
+  },
+  "50": {
+    "name": "minecraft:husk",
+    "group": "monster",
+    "hostile": true
+  },
+  "51": {
+    "name": "minecraft:illusioner",
+    "group": "monster",
+    "hostile": true
+  },
+  "52": {
+    "name": "minecraft:interaction",
+    "group": "misc",
+    "hostile": false
+  },
+  "53": {
+    "name": "minecraft:iron_golem",
+    "group": "misc",
+    "hostile": false
+  },
+  "54": {
+    "name": "minecraft:item",
+    "group": "misc",
+    "hostile": false
+  },
+  "55": {
+    "name": "minecraft:item_display",
+    "group": "misc",
+    "hostile": false
+  },
+  "56": {
+    "name": "minecraft:item_frame",
+    "group": "misc",
+    "hostile": false
+  },
+  "57": {
+    "name": "minecraft:fireball",
+    "group": "misc",
+    "hostile": false
+  },
+  "58": {
+    "name": "minecraft:leash_knot",
+    "group": "misc",
+    "hostile": false
+  },
+  "59": {
+    "name": "minecraft:lightning_bolt",
+    "group": "misc",
+    "hostile": false
+  },
+  "60": {
+    "name": "minecraft:llama",
+    "group": "creature",
+    "hostile": false
+  },
+  "61": {
+    "name": "minecraft:llama_spit",
+    "group": "misc",
+    "hostile": false
+  },
+  "62": {
+    "name": "minecraft:magma_cube",
+    "group": "monster",
+    "hostile": true
+  },
+  "63": {
+    "name": "minecraft:marker",
+    "group": "misc",
+    "hostile": false
+  },
+  "64": {
+    "name": "minecraft:minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "65": {
+    "name": "minecraft:mooshroom",
+    "group": "creature",
+    "hostile": false
+  },
+  "66": {
+    "name": "minecraft:mule",
+    "group": "creature",
+    "hostile": false
+  },
+  "67": {
+    "name": "minecraft:ocelot",
+    "group": "creature",
+    "hostile": false
+  },
+  "68": {
+    "name": "minecraft:painting",
+    "group": "misc",
+    "hostile": false
+  },
+  "69": {
+    "name": "minecraft:panda",
+    "group": "creature",
+    "hostile": false
+  },
+  "70": {
+    "name": "minecraft:parrot",
+    "group": "creature",
+    "hostile": false
+  },
+  "71": {
+    "name": "minecraft:phantom",
+    "group": "monster",
+    "hostile": true
+  },
+  "72": {
+    "name": "minecraft:pig",
+    "group": "creature",
+    "hostile": false
+  },
+  "73": {
+    "name": "minecraft:piglin",
+    "group": "monster",
+    "hostile": true
+  },
+  "74": {
+    "name": "minecraft:piglin_brute",
+    "group": "monster",
+    "hostile": true
+  },
+  "75": {
+    "name": "minecraft:pillager",
+    "group": "monster",
+    "hostile": true
+  },
+  "76": {
+    "name": "minecraft:polar_bear",
+    "group": "creature",
+    "hostile": false
+  },
+  "77": {
+    "name": "minecraft:potion",
+    "group": "misc",
+    "hostile": false
+  },
+  "78": {
+    "name": "minecraft:pufferfish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "79": {
+    "name": "minecraft:rabbit",
+    "group": "creature",
+    "hostile": false
+  },
+  "80": {
+    "name": "minecraft:ravager",
+    "group": "monster",
+    "hostile": true
+  },
+  "81": {
+    "name": "minecraft:salmon",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "82": {
+    "name": "minecraft:sheep",
+    "group": "creature",
+    "hostile": false
+  },
+  "83": {
+    "name": "minecraft:shulker",
+    "group": "monster",
+    "hostile": true
+  },
+  "84": {
+    "name": "minecraft:shulker_bullet",
+    "group": "misc",
+    "hostile": false
+  },
+  "85": {
+    "name": "minecraft:silverfish",
+    "group": "monster",
+    "hostile": true
+  },
+  "86": {
+    "name": "minecraft:skeleton",
+    "group": "monster",
+    "hostile": true
+  },
+  "87": {
+    "name": "minecraft:skeleton_horse",
+    "group": "creature",
+    "hostile": false
+  },
+  "88": {
+    "name": "minecraft:slime",
+    "group": "monster",
+    "hostile": true
+  },
+  "89": {
+    "name": "minecraft:small_fireball",
+    "group": "misc",
+    "hostile": false
+  },
+  "90": {
+    "name": "minecraft:sniffer",
+    "group": "creature",
+    "hostile": false
+  },
+  "91": {
+    "name": "minecraft:snow_golem",
+    "group": "misc",
+    "hostile": false
+  },
+  "92": {
+    "name": "minecraft:snowball",
+    "group": "misc",
+    "hostile": false
+  },
+  "93": {
+    "name": "minecraft:spawner_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "94": {
+    "name": "minecraft:spectral_arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "95": {
+    "name": "minecraft:spider",
+    "group": "monster",
+    "hostile": true
+  },
+  "96": {
+    "name": "minecraft:squid",
+    "group": "water_creature",
+    "hostile": false
+  },
+  "97": {
+    "name": "minecraft:stray",
+    "group": "monster",
+    "hostile": true
+  },
+  "98": {
+    "name": "minecraft:strider",
+    "group": "creature",
+    "hostile": false
+  },
+  "99": {
+    "name": "minecraft:tadpole",
+    "group": "creature",
+    "hostile": false
+  },
+  "100": {
+    "name": "minecraft:text_display",
+    "group": "misc",
+    "hostile": false
+  },
+  "101": {
+    "name": "minecraft:tnt",
+    "group": "misc",
+    "hostile": false
+  },
+  "102": {
+    "name": "minecraft:tnt_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "103": {
+    "name": "minecraft:trader_llama",
+    "group": "creature",
+    "hostile": false
+  },
+  "104": {
+    "name": "minecraft:trident",
+    "group": "misc",
+    "hostile": false
+  },
+  "105": {
+    "name": "minecraft:tropical_fish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "106": {
+    "name": "minecraft:turtle",
+    "group": "creature",
+    "hostile": false
+  },
+  "107": {
+    "name": "minecraft:vex",
+    "group": "monster",
+    "hostile": true
+  },
+  "108": {
+    "name": "minecraft:villager",
+    "group": "misc",
+    "hostile": false
+  },
+  "109": {
+    "name": "minecraft:vindicator",
+    "group": "monster",
+    "hostile": true
+  },
+  "110": {
+    "name": "minecraft:wandering_trader",
+    "group": "creature",
+    "hostile": false
+  },
+  "111": {
+    "name": "minecraft:warden",
+    "group": "monster",
+    "hostile": true
+  },
+  "112": {
+    "name": "minecraft:witch",
+    "group": "monster",
+    "hostile": true
+  },
+  "113": {
+    "name": "minecraft:wither",
+    "group": "monster",
+    "hostile": true
+  },
+  "114": {
+    "name": "minecraft:wither_skeleton",
+    "group": "monster",
+    "hostile": true
+  },
+  "115": {
+    "name": "minecraft:wither_skull",
+    "group": "misc",
+    "hostile": false
+  },
+  "116": {
+    "name": "minecraft:wolf",
+    "group": "creature",
+    "hostile": false
+  },
+  "117": {
+    "name": "minecraft:zoglin",
+    "group": "monster",
+    "hostile": true
+  },
+  "118": {
+    "name": "minecraft:zombie",
+    "group": "monster",
+    "hostile": true
+  },
+  "119": {
+    "name": "minecraft:zombie_horse",
+    "group": "creature",
+    "hostile": false
+  },
+  "120": {
+    "name": "minecraft:zombie_villager",
+    "group": "monster",
+    "hostile": true
+  },
+  "121": {
+    "name": "minecraft:zombified_piglin",
+    "group": "monster",
+    "hostile": true
+  },
+  "122": {
+    "name": "minecraft:player",
+    "group": "misc",
+    "hostile": false
+  },
+  "123": {
+    "name": "minecraft:fishing_bobber",
+    "group": "misc",
+    "hostile": false
+  },
+  "124": {
+    "name": "eldritch_end:ominous_eye",
+    "group": "monster",
+    "hostile": true
+  },
+  "125": {
+    "name": "eldritch_end:aberration",
+    "group": "monster",
+    "hostile": true
+  },
+  "126": {
+    "name": "eldritch_end:tentacle",
+    "group": "monster",
+    "hostile": true
+  },
+  "127": {
+    "name": "eldritch_end:undead_tentacle",
+    "group": "monster",
+    "hostile": true
+  },
+  "128": {
+    "name": "eldritch_end:dendler",
+    "group": "monster",
+    "hostile": true
+  },
+  "129": {
+    "name": "eldritch_end:the_faceless",
+    "group": "monster",
+    "hostile": true
+  },
+  "130": {
+    "name": "betternether:firefly",
+    "group": "ambient",
+    "hostile": false
+  },
+  "131": {
+    "name": "betternether:hydrogen_jellyfish",
+    "group": "ambient",
+    "hostile": false
+  },
+  "132": {
+    "name": "betternether:naga",
+    "group": "monster",
+    "hostile": true
+  },
+  "133": {
+    "name": "betternether:flying_pig",
+    "group": "ambient",
+    "hostile": false
+  },
+  "134": {
+    "name": "betternether:jungle_skeleton",
+    "group": "monster",
+    "hostile": true
+  },
+  "135": {
+    "name": "betternether:skull",
+    "group": "monster",
+    "hostile": true
+  },
+  "136": {
+    "name": "ad_astra:air_vortex",
+    "group": "misc",
+    "hostile": false
+  },
+  "137": {
+    "name": "ad_astra:tier_1_rover",
+    "group": "misc",
+    "hostile": false
+  },
+  "138": {
+    "name": "ad_astra:tier_1_rocket",
+    "group": "misc",
+    "hostile": false
+  },
+  "139": {
+    "name": "ad_astra:tier_2_rocket",
+    "group": "misc",
+    "hostile": false
+  },
+  "140": {
+    "name": "ad_astra:tier_3_rocket",
+    "group": "misc",
+    "hostile": false
+  },
+  "141": {
+    "name": "ad_astra:tier_4_rocket",
+    "group": "misc",
+    "hostile": false
+  },
+  "142": {
+    "name": "ad_astra:lander",
+    "group": "misc",
+    "hostile": false
+  },
+  "143": {
+    "name": "ad_astra:lunarian",
+    "group": "creature",
+    "hostile": false
+  },
+  "144": {
+    "name": "ad_astra:corrupted_lunarian",
+    "group": "monster",
+    "hostile": true
+  },
+  "145": {
+    "name": "ad_astra:star_crawler",
+    "group": "monster",
+    "hostile": true
+  },
+  "146": {
+    "name": "ad_astra:martian_raptor",
+    "group": "monster",
+    "hostile": true
+  },
+  "147": {
+    "name": "ad_astra:pygro",
+    "group": "monster",
+    "hostile": true
+  },
+  "148": {
+    "name": "ad_astra:zombified_pygro",
+    "group": "monster",
+    "hostile": true
+  },
+  "149": {
+    "name": "ad_astra:pygro_brute",
+    "group": "monster",
+    "hostile": true
+  },
+  "150": {
+    "name": "ad_astra:mogler",
+    "group": "monster",
+    "hostile": true
+  },
+  "151": {
+    "name": "ad_astra:zombified_mogler",
+    "group": "monster",
+    "hostile": true
+  },
+  "152": {
+    "name": "ad_astra:lunarian_wandering_trader",
+    "group": "creature",
+    "hostile": false
+  },
+  "153": {
+    "name": "ad_astra:sulfur_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "154": {
+    "name": "ad_astra:glacian_ram",
+    "group": "creature",
+    "hostile": false
+  },
+  "155": {
+    "name": "ad_astra:ice_spit",
+    "group": "misc",
+    "hostile": false
+  },
+  "156": {
+    "name": "adventurez:blackstone_golem",
+    "group": "monster",
+    "hostile": true
+  },
+  "157": {
+    "name": "adventurez:mini_blackstone_golem",
+    "group": "monster",
+    "hostile": true
+  },
+  "158": {
+    "name": "adventurez:piglin_beast",
+    "group": "monster",
+    "hostile": true
+  },
+  "159": {
+    "name": "adventurez:soul_reaper",
+    "group": "monster",
+    "hostile": true
+  },
+  "160": {
+    "name": "adventurez:necromancer",
+    "group": "monster",
+    "hostile": true
+  },
+  "161": {
+    "name": "adventurez:wither_puppet",
+    "group": "monster",
+    "hostile": true
+  },
+  "162": {
+    "name": "adventurez:skeleton_vanguard",
+    "group": "monster",
+    "hostile": true
+  },
+  "163": {
+    "name": "adventurez:summoner",
+    "group": "monster",
+    "hostile": true
+  },
+  "164": {
+    "name": "adventurez:blaze_guardian",
+    "group": "monster",
+    "hostile": true
+  },
+  "165": {
+    "name": "adventurez:the_eye",
+    "group": "monster",
+    "hostile": true
+  },
+  "166": {
+    "name": "adventurez:void_shadow",
+    "group": "monster",
+    "hostile": true
+  },
+  "167": {
+    "name": "adventurez:orc",
+    "group": "monster",
+    "hostile": true
+  },
+  "168": {
+    "name": "adventurez:void_shade",
+    "group": "monster",
+    "hostile": true
+  },
+  "169": {
+    "name": "adventurez:amethyst_golem",
+    "group": "monster",
+    "hostile": true
+  },
+  "170": {
+    "name": "adventurez:desert_rhino",
+    "group": "monster",
+    "hostile": true
+  },
+  "171": {
+    "name": "adventurez:shaman",
+    "group": "monster",
+    "hostile": true
+  },
+  "172": {
+    "name": "adventurez:enderwarthog",
+    "group": "monster",
+    "hostile": true
+  },
+  "173": {
+    "name": "adventurez:red_fungus",
+    "group": "creature",
+    "hostile": false
+  },
+  "174": {
+    "name": "adventurez:brown_fungus",
+    "group": "creature",
+    "hostile": false
+  },
+  "175": {
+    "name": "adventurez:nightmare",
+    "group": "creature",
+    "hostile": false
+  },
+  "176": {
+    "name": "adventurez:dragon",
+    "group": "creature",
+    "hostile": false
+  },
+  "177": {
+    "name": "adventurez:mammoth",
+    "group": "creature",
+    "hostile": false
+  },
+  "178": {
+    "name": "adventurez:ender_whale",
+    "group": "creature",
+    "hostile": false
+  },
+  "179": {
+    "name": "adventurez:iguana",
+    "group": "creature",
+    "hostile": false
+  },
+  "180": {
+    "name": "adventurez:deer",
+    "group": "creature",
+    "hostile": false
+  },
+  "181": {
+    "name": "adventurez:thrown_rock",
+    "group": "misc",
+    "hostile": false
+  },
+  "182": {
+    "name": "adventurez:gilded_blackstone_shard",
+    "group": "misc",
+    "hostile": false
+  },
+  "183": {
+    "name": "adventurez:tiny_eye",
+    "group": "misc",
+    "hostile": false
+  },
+  "184": {
+    "name": "adventurez:void_bullet",
+    "group": "misc",
+    "hostile": false
+  },
+  "185": {
+    "name": "adventurez:fire_breath",
+    "group": "misc",
+    "hostile": false
+  },
+  "186": {
+    "name": "adventurez:blaze_guardian_shield",
+    "group": "misc",
+    "hostile": false
+  },
+  "187": {
+    "name": "adventurez:amethyst_shard",
+    "group": "misc",
+    "hostile": false
+  },
+  "188": {
+    "name": "adventurez:void_cloud",
+    "group": "misc",
+    "hostile": false
+  },
+  "189": {
+    "name": "adventurez:void_fragment",
+    "group": "monster",
+    "hostile": true
+  },
+  "190": {
+    "name": "aquamirae:golden_moth",
+    "group": "ambient",
+    "hostile": false
+  },
+  "191": {
+    "name": "aquamirae:maw",
+    "group": "monster",
+    "hostile": true
+  },
+  "192": {
+    "name": "aquamirae:anglerfish",
+    "group": "water_creature",
+    "hostile": false
+  },
+  "193": {
+    "name": "aquamirae:maze_mother",
+    "group": "monster",
+    "hostile": true
+  },
+  "194": {
+    "name": "aquamirae:captain_cornelia",
+    "group": "monster",
+    "hostile": true
+  },
+  "195": {
+    "name": "aquamirae:pillagers_patrol",
+    "group": "monster",
+    "hostile": true
+  },
+  "196": {
+    "name": "aquamirae:tortured_soul",
+    "group": "monster",
+    "hostile": true
+  },
+  "197": {
+    "name": "aquamirae:eel",
+    "group": "monster",
+    "hostile": true
+  },
+  "198": {
+    "name": "aquamirae:maze_rose",
+    "group": "misc",
+    "hostile": false
+  },
+  "199": {
+    "name": "aquamirae:poisoned_chakra",
+    "group": "misc",
+    "hostile": false
+  },
+  "200": {
+    "name": "aquamirae:spinefish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "201": {
+    "name": "aqupd:caracal",
+    "group": "creature",
+    "hostile": false
+  },
+  "202": {
+    "name": "archers_expansion:winters_grip",
+    "group": "misc",
+    "hostile": false
+  },
+  "203": {
+    "name": "archon:water_bolt",
+    "group": "misc",
+    "hostile": false
+  },
+  "204": {
+    "name": "archon:ice_ball",
+    "group": "misc",
+    "hostile": false
+  },
+  "205": {
+    "name": "archon:wind_ball",
+    "group": "misc",
+    "hostile": false
+  },
+  "206": {
+    "name": "archon:spell_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "207": {
+    "name": "archon:terrain",
+    "group": "misc",
+    "hostile": false
+  },
+  "208": {
+    "name": "archon:skelt",
+    "group": "misc",
+    "hostile": false
+  },
+  "209": {
+    "name": "archon:prime_skelt",
+    "group": "misc",
+    "hostile": false
+  },
+  "210": {
+    "name": "archon:omega_skelt",
+    "group": "misc",
+    "hostile": false
+  },
+  "211": {
+    "name": "archon:mana_leech",
+    "group": "monster",
+    "hostile": true
+  },
+  "212": {
+    "name": "archon:tar",
+    "group": "misc",
+    "hostile": false
+  },
+  "213": {
+    "name": "archon:ayla",
+    "group": "misc",
+    "hostile": false
+  },
+  "214": {
+    "name": "archon:leven",
+    "group": "misc",
+    "hostile": false
+  },
+  "215": {
+    "name": "archon:inigo",
+    "group": "misc",
+    "hostile": false
+  },
+  "216": {
+    "name": "archon:null",
+    "group": "misc",
+    "hostile": false
+  },
+  "217": {
+    "name": "artifacts:mimic",
+    "group": "misc",
+    "hostile": false
+  },
+  "218": {
+    "name": "bclib:chair",
+    "group": "misc",
+    "hostile": false
+  },
+  "219": {
+    "name": "betterarcheology:bombentity",
+    "group": "misc",
+    "hostile": false
+  },
+  "220": {
+    "name": "betterend:dragonfly",
+    "group": "ambient",
+    "hostile": false
+  },
+  "221": {
+    "name": "betterend:end_slime",
+    "group": "monster",
+    "hostile": true
+  },
+  "222": {
+    "name": "betterend:end_fish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "223": {
+    "name": "betterend:shadow_walker",
+    "group": "monster",
+    "hostile": true
+  },
+  "224": {
+    "name": "betterend:cubozoa",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "225": {
+    "name": "betterend:silk_moth",
+    "group": "ambient",
+    "hostile": false
+  },
+  "226": {
+    "name": "betternether:naga_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "227": {
+    "name": "bewitchment:juniper_broom",
+    "group": "misc",
+    "hostile": false
+  },
+  "228": {
+    "name": "bewitchment:cypress_broom",
+    "group": "misc",
+    "hostile": false
+  },
+  "229": {
+    "name": "bewitchment:elder_broom",
+    "group": "misc",
+    "hostile": false
+  },
+  "230": {
+    "name": "bewitchment:dragons_blood_broom",
+    "group": "misc",
+    "hostile": false
+  },
+  "231": {
+    "name": "bewitchment:silver_arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "232": {
+    "name": "bewitchment:horned_spear",
+    "group": "misc",
+    "hostile": false
+  },
+  "233": {
+    "name": "bewitchment:owl",
+    "group": "creature",
+    "hostile": false
+  },
+  "234": {
+    "name": "bewitchment:raven",
+    "group": "creature",
+    "hostile": false
+  },
+  "235": {
+    "name": "bewitchment:snake",
+    "group": "creature",
+    "hostile": false
+  },
+  "236": {
+    "name": "bewitchment:toad",
+    "group": "creature",
+    "hostile": false
+  },
+  "237": {
+    "name": "bewitchment:ghost",
+    "group": "monster",
+    "hostile": true
+  },
+  "238": {
+    "name": "bewitchment:vampire",
+    "group": "monster",
+    "hostile": true
+  },
+  "239": {
+    "name": "bewitchment:werewolf",
+    "group": "monster",
+    "hostile": true
+  },
+  "240": {
+    "name": "bewitchment:hellhound",
+    "group": "monster",
+    "hostile": true
+  },
+  "241": {
+    "name": "bewitchment:demon",
+    "group": "monster",
+    "hostile": true
+  },
+  "242": {
+    "name": "bewitchment:leonard",
+    "group": "monster",
+    "hostile": true
+  },
+  "243": {
+    "name": "bewitchment:baphomet",
+    "group": "monster",
+    "hostile": true
+  },
+  "244": {
+    "name": "bewitchment:lilith",
+    "group": "monster",
+    "hostile": true
+  },
+  "245": {
+    "name": "bewitchment:herne",
+    "group": "monster",
+    "hostile": true
+  },
+  "246": {
+    "name": "bosses_of_mass_destruction:lich",
+    "group": "monster",
+    "hostile": true
+  },
+  "247": {
+    "name": "bosses_of_mass_destruction:blue_fireball",
+    "group": "misc",
+    "hostile": false
+  },
+  "248": {
+    "name": "bosses_of_mass_destruction:comet",
+    "group": "misc",
+    "hostile": false
+  },
+  "249": {
+    "name": "bosses_of_mass_destruction:soul_star",
+    "group": "misc",
+    "hostile": false
+  },
+  "250": {
+    "name": "bosses_of_mass_destruction:charged_ender_pearl",
+    "group": "misc",
+    "hostile": false
+  },
+  "251": {
+    "name": "bosses_of_mass_destruction:obsidilith",
+    "group": "monster",
+    "hostile": true
+  },
+  "252": {
+    "name": "bosses_of_mass_destruction:gauntlet",
+    "group": "monster",
+    "hostile": true
+  },
+  "253": {
+    "name": "bosses_of_mass_destruction:void_blossom",
+    "group": "monster",
+    "hostile": true
+  },
+  "254": {
+    "name": "bosses_of_mass_destruction:spore_ball",
+    "group": "misc",
+    "hostile": false
+  },
+  "255": {
+    "name": "bosses_of_mass_destruction:petal_blade",
+    "group": "misc",
+    "hostile": false
+  },
+  "256": {
+    "name": "botania:mana_burst",
+    "group": "misc",
+    "hostile": false
+  },
+  "257": {
+    "name": "botania:pixie",
+    "group": "misc",
+    "hostile": false
+  },
+  "258": {
+    "name": "botania:flame_ring",
+    "group": "misc",
+    "hostile": false
+  },
+  "259": {
+    "name": "botania:vine_ball",
+    "group": "misc",
+    "hostile": false
+  },
+  "260": {
+    "name": "botania:doppleganger",
+    "group": "monster",
+    "hostile": true
+  },
+  "261": {
+    "name": "botania:magic_landmine",
+    "group": "misc",
+    "hostile": false
+  },
+  "262": {
+    "name": "botania:spark",
+    "group": "misc",
+    "hostile": false
+  },
+  "263": {
+    "name": "botania:thrown_item",
+    "group": "misc",
+    "hostile": false
+  },
+  "264": {
+    "name": "botania:magic_missile",
+    "group": "misc",
+    "hostile": false
+  },
+  "265": {
+    "name": "botania:thorn_chakram",
+    "group": "misc",
+    "hostile": false
+  },
+  "266": {
+    "name": "botania:corporea_spark",
+    "group": "misc",
+    "hostile": false
+  },
+  "267": {
+    "name": "botania:ender_air_bottle",
+    "group": "misc",
+    "hostile": false
+  },
+  "268": {
+    "name": "botania:pool_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "269": {
+    "name": "botania:pink_wither",
+    "group": "misc",
+    "hostile": false
+  },
+  "270": {
+    "name": "botania:player_mover",
+    "group": "misc",
+    "hostile": false
+  },
+  "271": {
+    "name": "botania:mana_storm",
+    "group": "misc",
+    "hostile": false
+  },
+  "272": {
+    "name": "botania:babylon_weapon",
+    "group": "misc",
+    "hostile": false
+  },
+  "273": {
+    "name": "botania:falling_star",
+    "group": "misc",
+    "hostile": false
+  },
+  "274": {
+    "name": "botania:ender_air",
+    "group": "misc",
+    "hostile": false
+  },
+  "275": {
+    "name": "brewery:rope_knot",
+    "group": "misc",
+    "hostile": false
+  },
+  "276": {
+    "name": "brewery:rope_collision",
+    "group": "misc",
+    "hostile": false
+  },
+  "277": {
+    "name": "brewery:hanging_rope",
+    "group": "misc",
+    "hostile": false
+  },
+  "278": {
+    "name": "brewery:beer_elemental",
+    "group": "monster",
+    "hostile": true
+  },
+  "279": {
+    "name": "brewery:beer_elemental_attack",
+    "group": "misc",
+    "hostile": false
+  },
+  "280": {
+    "name": "connectiblechains:chain_knot",
+    "group": "misc",
+    "hostile": false
+  },
+  "281": {
+    "name": "connectiblechains:chain_collision",
+    "group": "misc",
+    "hostile": false
+  },
+  "282": {
+    "name": "create:contraption",
+    "group": "misc",
+    "hostile": false
+  },
+  "283": {
+    "name": "create:stationary_contraption",
+    "group": "misc",
+    "hostile": false
+  },
+  "284": {
+    "name": "create:gantry_contraption",
+    "group": "misc",
+    "hostile": false
+  },
+  "285": {
+    "name": "create:carriage_contraption",
+    "group": "misc",
+    "hostile": false
+  },
+  "286": {
+    "name": "create:super_glue",
+    "group": "misc",
+    "hostile": false
+  },
+  "287": {
+    "name": "create:crafting_blueprint",
+    "group": "misc",
+    "hostile": false
+  },
+  "288": {
+    "name": "create:potato_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "289": {
+    "name": "create:seat",
+    "group": "misc",
+    "hostile": false
+  },
+  "290": {
+    "name": "create:package",
+    "group": "misc",
+    "hostile": false
+  },
+  "291": {
+    "name": "creeperoverhaul:jungle_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "292": {
+    "name": "creeperoverhaul:bamboo_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "293": {
+    "name": "creeperoverhaul:desert_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "294": {
+    "name": "creeperoverhaul:badlands_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "295": {
+    "name": "creeperoverhaul:hills_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "296": {
+    "name": "creeperoverhaul:savannah_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "297": {
+    "name": "creeperoverhaul:mushroom_creeper",
+    "group": "creature",
+    "hostile": false
+  },
+  "298": {
+    "name": "creeperoverhaul:swamp_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "299": {
+    "name": "creeperoverhaul:dripstone_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "300": {
+    "name": "creeperoverhaul:cave_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "301": {
+    "name": "creeperoverhaul:dark_oak_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "302": {
+    "name": "creeperoverhaul:spruce_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "303": {
+    "name": "creeperoverhaul:beach_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "304": {
+    "name": "creeperoverhaul:snowy_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "305": {
+    "name": "creeperoverhaul:ocean_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "306": {
+    "name": "dawn:flying_block",
+    "group": "misc",
+    "hostile": false
+  },
+  "307": {
+    "name": "dawn:custom_tnt",
+    "group": "misc",
+    "hostile": false
+  },
+  "308": {
+    "name": "decorative_blocks:dummy_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "309": {
+    "name": "deeperdarker:boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "310": {
+    "name": "deeperdarker:chest_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "311": {
+    "name": "deeperdarker:angler_fish",
+    "group": "water_creature",
+    "hostile": false
+  },
+  "312": {
+    "name": "deeperdarker:sculk_centipede",
+    "group": "monster",
+    "hostile": true
+  },
+  "313": {
+    "name": "deeperdarker:sculk_leech",
+    "group": "monster",
+    "hostile": true
+  },
+  "314": {
+    "name": "deeperdarker:sculk_snapper",
+    "group": "monster",
+    "hostile": true
+  },
+  "315": {
+    "name": "deeperdarker:shattered",
+    "group": "monster",
+    "hostile": true
+  },
+  "316": {
+    "name": "deeperdarker:shriek_worm",
+    "group": "monster",
+    "hostile": true
+  },
+  "317": {
+    "name": "deeperdarker:sludge",
+    "group": "monster",
+    "hostile": true
+  },
+  "318": {
+    "name": "deeperdarker:stalker",
+    "group": "monster",
+    "hostile": true
+  },
+  "319": {
+    "name": "derelict:arachne",
+    "group": "monster",
+    "hostile": true
+  },
+  "320": {
+    "name": "derelict:spiderling",
+    "group": "monster",
+    "hostile": true
+  },
+  "321": {
+    "name": "doapi:chair",
+    "group": "misc",
+    "hostile": false
+  },
+  "322": {
+    "name": "eldritch_end:eye",
+    "group": "monster",
+    "hostile": true
+  },
+  "323": {
+    "name": "eldritch_end:crystal",
+    "group": "monster",
+    "hostile": true
+  },
+  "324": {
+    "name": "eldritch_end:arcane_missile",
+    "group": "misc",
+    "hostile": false
+  },
+  "325": {
+    "name": "estrogen:moth",
+    "group": "moth",
+    "hostile": false
+  },
+  "326": {
+    "name": "farmersdelight:rotten_tomato",
+    "group": "misc",
+    "hostile": false
+  },
+  "327": {
+    "name": "friendsandfoes:copper_golem",
+    "group": "misc",
+    "hostile": false
+  },
+  "328": {
+    "name": "friendsandfoes:crab",
+    "group": "creature",
+    "hostile": false
+  },
+  "329": {
+    "name": "friendsandfoes:glare",
+    "group": "glares",
+    "hostile": false
+  },
+  "330": {
+    "name": "friendsandfoes:iceologer",
+    "group": "monster",
+    "hostile": true
+  },
+  "331": {
+    "name": "friendsandfoes:ice_chunk",
+    "group": "misc",
+    "hostile": false
+  },
+  "332": {
+    "name": "friendsandfoes:mauler",
+    "group": "creature",
+    "hostile": false
+  },
+  "333": {
+    "name": "friendsandfoes:moobloom",
+    "group": "creature",
+    "hostile": false
+  },
+  "334": {
+    "name": "friendsandfoes:rascal",
+    "group": "rascals",
+    "hostile": false
+  },
+  "335": {
+    "name": "friendsandfoes:tuff_golem",
+    "group": "misc",
+    "hostile": false
+  },
+  "336": {
+    "name": "friendsandfoes:wildfire",
+    "group": "monster",
+    "hostile": true
+  },
+  "337": {
+    "name": "friendsandfoes:player_illusion",
+    "group": "misc",
+    "hostile": false
+  },
+  "338": {
+    "name": "frostiful:frostologer",
+    "group": "monster",
+    "hostile": true
+  },
+  "339": {
+    "name": "frostiful:chillager",
+    "group": "monster",
+    "hostile": true
+  },
+  "340": {
+    "name": "frostiful:biter",
+    "group": "monster",
+    "hostile": true
+  },
+  "341": {
+    "name": "frostiful:frost_tipped_arrow",
+    "group": "creature",
+    "hostile": false
+  },
+  "342": {
+    "name": "frostiful:frost_spell",
+    "group": "misc",
+    "hostile": false
+  },
+  "343": {
+    "name": "frostiful:packed_snowball",
+    "group": "misc",
+    "hostile": false
+  },
+  "344": {
+    "name": "frostiful:thrown_icicle",
+    "group": "misc",
+    "hostile": false
+  },
+  "345": {
+    "name": "frostiful:freezing_wind",
+    "group": "ambient",
+    "hostile": false
+  },
+  "346": {
+    "name": "graveyard:reaper",
+    "group": "monster",
+    "hostile": true
+  },
+  "347": {
+    "name": "graveyard:acolyte",
+    "group": "monster",
+    "hostile": true
+  },
+  "348": {
+    "name": "graveyard:corrupted_vindicator",
+    "group": "monster",
+    "hostile": true
+  },
+  "349": {
+    "name": "graveyard:corrupted_pillager",
+    "group": "monster",
+    "hostile": true
+  },
+  "350": {
+    "name": "graveyard:skeleton_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "351": {
+    "name": "graveyard:falling_corpse",
+    "group": "misc",
+    "hostile": false
+  },
+  "352": {
+    "name": "graveyard:ghoul",
+    "group": "monster",
+    "hostile": true
+  },
+  "353": {
+    "name": "graveyard:revenant",
+    "group": "monster",
+    "hostile": true
+  },
+  "354": {
+    "name": "graveyard:wraith",
+    "group": "monster",
+    "hostile": true
+  },
+  "355": {
+    "name": "graveyard:nightmare",
+    "group": "monster",
+    "hostile": true
+  },
+  "356": {
+    "name": "graveyard:ghouling",
+    "group": "creature",
+    "hostile": false
+  },
+  "357": {
+    "name": "graveyard:lich",
+    "group": "monster",
+    "hostile": true
+  },
+  "358": {
+    "name": "graveyard:skull",
+    "group": "misc",
+    "hostile": false
+  },
+  "359": {
+    "name": "graveyard:nameless_hanged",
+    "group": "monster",
+    "hostile": true
+  },
+  "360": {
+    "name": "handcrafted:seat",
+    "group": "misc",
+    "hostile": false
+  },
+  "361": {
+    "name": "handcrafted:fancy_painting",
+    "group": "misc",
+    "hostile": false
+  },
+  "362": {
+    "name": "invoke:glaciersmall",
+    "group": "misc",
+    "hostile": false
+  },
+  "363": {
+    "name": "invoke:glaciermedium",
+    "group": "misc",
+    "hostile": false
+  },
+  "364": {
+    "name": "invoke:glacierlarge",
+    "group": "misc",
+    "hostile": false
+  },
+  "365": {
+    "name": "invoke:glacierhuge",
+    "group": "misc",
+    "hostile": false
+  },
+  "366": {
+    "name": "invoke:gazehitter",
+    "group": "misc",
+    "hostile": false
+  },
+  "367": {
+    "name": "kibe:thrown_torch",
+    "group": "misc",
+    "hostile": false
+  },
+  "368": {
+    "name": "lootr:lootr_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "369": {
+    "name": "mcda:summoned_bee",
+    "group": "creature",
+    "hostile": false
+  },
+  "370": {
+    "name": "mcdw:summoned_bee",
+    "group": "creature",
+    "hostile": false
+  },
+  "371": {
+    "name": "minecells:leaping_zombie",
+    "group": "monster",
+    "hostile": true
+  },
+  "372": {
+    "name": "minecells:shocker",
+    "group": "monster",
+    "hostile": true
+  },
+  "373": {
+    "name": "minecells:grenadier",
+    "group": "monster",
+    "hostile": true
+  },
+  "374": {
+    "name": "minecells:disgusting_worm",
+    "group": "monster",
+    "hostile": true
+  },
+  "375": {
+    "name": "minecells:inquisitor",
+    "group": "monster",
+    "hostile": true
+  },
+  "376": {
+    "name": "minecells:kamikaze",
+    "group": "monster",
+    "hostile": true
+  },
+  "377": {
+    "name": "minecells:protector",
+    "group": "monster",
+    "hostile": true
+  },
+  "378": {
+    "name": "minecells:undead_archer",
+    "group": "monster",
+    "hostile": true
+  },
+  "379": {
+    "name": "minecells:shieldbearer",
+    "group": "monster",
+    "hostile": true
+  },
+  "380": {
+    "name": "minecells:mutated_bat",
+    "group": "monster",
+    "hostile": true
+  },
+  "381": {
+    "name": "minecells:sewers_tentacle",
+    "group": "monster",
+    "hostile": true
+  },
+  "382": {
+    "name": "minecells:rancid_rat",
+    "group": "monster",
+    "hostile": true
+  },
+  "383": {
+    "name": "minecells:runner",
+    "group": "monster",
+    "hostile": true
+  },
+  "384": {
+    "name": "minecells:scorpion",
+    "group": "monster",
+    "hostile": true
+  },
+  "385": {
+    "name": "minecells:buzzcutter",
+    "group": "monster",
+    "hostile": true
+  },
+  "386": {
+    "name": "minecells:sweeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "387": {
+    "name": "minecells:conjunctivius",
+    "group": "monster",
+    "hostile": true
+  },
+  "388": {
+    "name": "minecells:concierge",
+    "group": "monster",
+    "hostile": true
+  },
+  "389": {
+    "name": "minecells:grenade",
+    "group": "misc",
+    "hostile": false
+  },
+  "390": {
+    "name": "minecells:big_grenade",
+    "group": "misc",
+    "hostile": false
+  },
+  "391": {
+    "name": "minecells:disgusting_worm_egg",
+    "group": "misc",
+    "hostile": false
+  },
+  "392": {
+    "name": "minecells:magic_orb",
+    "group": "misc",
+    "hostile": false
+  },
+  "393": {
+    "name": "minecells:scorpion_spit",
+    "group": "misc",
+    "hostile": false
+  },
+  "394": {
+    "name": "minecells:conjunctivius_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "395": {
+    "name": "minecells:custom_arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "396": {
+    "name": "minecells:elevator",
+    "group": "misc",
+    "hostile": false
+  },
+  "397": {
+    "name": "minecells:cell",
+    "group": "misc",
+    "hostile": false
+  },
+  "398": {
+    "name": "minecells:tentacle_weapon",
+    "group": "misc",
+    "hostile": false
+  },
+  "399": {
+    "name": "minecells:spawner_rune",
+    "group": "misc",
+    "hostile": false
+  },
+  "400": {
+    "name": "minecells:conjunctivius_obelisk",
+    "group": "misc",
+    "hostile": false
+  },
+  "401": {
+    "name": "minecells:concierge_obelisk",
+    "group": "misc",
+    "hostile": false
+  },
+  "402": {
+    "name": "minecells:elite_obelisk",
+    "group": "misc",
+    "hostile": false
+  },
+  "403": {
+    "name": "minecells:shockwave_placer",
+    "group": "misc",
+    "hostile": false
+  },
+  "404": {
+    "name": "mobs_of_mythology:automaton",
+    "group": "creature",
+    "hostile": false
+  },
+  "405": {
+    "name": "mobs_of_mythology:chupacabra",
+    "group": "monster",
+    "hostile": true
+  },
+  "406": {
+    "name": "mobs_of_mythology:kobold",
+    "group": "monster",
+    "hostile": true
+  },
+  "407": {
+    "name": "mobs_of_mythology:kobold_warrior",
+    "group": "monster",
+    "hostile": true
+  },
+  "408": {
+    "name": "mobs_of_mythology:drake",
+    "group": "creature",
+    "hostile": false
+  },
+  "409": {
+    "name": "mobs_of_mythology:sporeling",
+    "group": "creature",
+    "hostile": false
+  },
+  "410": {
+    "name": "moretotems:summoned_bee",
+    "group": "creature",
+    "hostile": false
+  },
+  "411": {
+    "name": "moretotems:summoned_zombie",
+    "group": "monster",
+    "hostile": true
+  },
+  "412": {
+    "name": "mutantmonsters:creeper_minion",
+    "group": "misc",
+    "hostile": false
+  },
+  "413": {
+    "name": "mutantmonsters:mutant_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "414": {
+    "name": "mutantmonsters:mutant_enderman",
+    "group": "monster",
+    "hostile": true
+  },
+  "415": {
+    "name": "mutantmonsters:mutant_skeleton",
+    "group": "monster",
+    "hostile": true
+  },
+  "416": {
+    "name": "mutantmonsters:mutant_snow_golem",
+    "group": "misc",
+    "hostile": false
+  },
+  "417": {
+    "name": "mutantmonsters:mutant_zombie",
+    "group": "monster",
+    "hostile": true
+  },
+  "418": {
+    "name": "mutantmonsters:spider_pig",
+    "group": "creature",
+    "hostile": false
+  },
+  "419": {
+    "name": "mutantmonsters:body_part",
+    "group": "misc",
+    "hostile": false
+  },
+  "420": {
+    "name": "mutantmonsters:creeper_minion_egg",
+    "group": "misc",
+    "hostile": false
+  },
+  "421": {
+    "name": "mutantmonsters:endersoul_clone",
+    "group": "monster",
+    "hostile": true
+  },
+  "422": {
+    "name": "mutantmonsters:endersoul_fragment",
+    "group": "misc",
+    "hostile": false
+  },
+  "423": {
+    "name": "mutantmonsters:throwable_block",
+    "group": "misc",
+    "hostile": false
+  },
+  "424": {
+    "name": "mutantmonsters:mutant_arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "425": {
+    "name": "mutantmonsters:skull_spirit",
+    "group": "misc",
+    "hostile": false
+  },
+  "426": {
+    "name": "mythicmounts:firebird",
+    "group": "creature",
+    "hostile": false
+  },
+  "427": {
+    "name": "mythicmounts:colelytra",
+    "group": "creature",
+    "hostile": false
+  },
+  "428": {
+    "name": "mythicmounts:acencia",
+    "group": "creature",
+    "hostile": false
+  },
+  "429": {
+    "name": "mythicmounts:archelon",
+    "group": "creature",
+    "hostile": false
+  },
+  "430": {
+    "name": "mythicmounts:courierbird",
+    "group": "creature",
+    "hostile": false
+  },
+  "431": {
+    "name": "mythicmounts:direwolf",
+    "group": "creature",
+    "hostile": false
+  },
+  "432": {
+    "name": "mythicmounts:dragon",
+    "group": "creature",
+    "hostile": false
+  },
+  "433": {
+    "name": "mythicmounts:griffon",
+    "group": "creature",
+    "hostile": false
+  },
+  "434": {
+    "name": "mythicmounts:geckotoalizard",
+    "group": "creature",
+    "hostile": false
+  },
+  "435": {
+    "name": "mythicmounts:moth",
+    "group": "creature",
+    "hostile": false
+  },
+  "436": {
+    "name": "mythicmounts:netherbat",
+    "group": "creature",
+    "hostile": false
+  },
+  "437": {
+    "name": "mythicmounts:nightmare",
+    "group": "creature",
+    "hostile": false
+  },
+  "438": {
+    "name": "mythicmounts:nudibranch",
+    "group": "creature",
+    "hostile": false
+  },
+  "439": {
+    "name": "mythicmounts:ridinglizard",
+    "group": "creature",
+    "hostile": false
+  },
+  "440": {
+    "name": "naturalist:alligator",
+    "group": "creature",
+    "hostile": false
+  },
+  "441": {
+    "name": "naturalist:bass",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "442": {
+    "name": "naturalist:bear",
+    "group": "creature",
+    "hostile": false
+  },
+  "443": {
+    "name": "naturalist:bluejay",
+    "group": "creature",
+    "hostile": false
+  },
+  "444": {
+    "name": "naturalist:boar",
+    "group": "creature",
+    "hostile": false
+  },
+  "445": {
+    "name": "naturalist:butterfly",
+    "group": "ambient",
+    "hostile": false
+  },
+  "446": {
+    "name": "naturalist:canary",
+    "group": "creature",
+    "hostile": false
+  },
+  "447": {
+    "name": "naturalist:cardinal",
+    "group": "creature",
+    "hostile": false
+  },
+  "448": {
+    "name": "naturalist:caterpillar",
+    "group": "creature",
+    "hostile": false
+  },
+  "449": {
+    "name": "naturalist:catfish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "450": {
+    "name": "naturalist:coral_snake",
+    "group": "creature",
+    "hostile": false
+  },
+  "451": {
+    "name": "naturalist:deer",
+    "group": "creature",
+    "hostile": false
+  },
+  "452": {
+    "name": "naturalist:dragonfly",
+    "group": "ambient",
+    "hostile": false
+  },
+  "453": {
+    "name": "naturalist:duck",
+    "group": "creature",
+    "hostile": false
+  },
+  "454": {
+    "name": "naturalist:duck_egg",
+    "group": "misc",
+    "hostile": false
+  },
+  "455": {
+    "name": "naturalist:elephant",
+    "group": "creature",
+    "hostile": false
+  },
+  "456": {
+    "name": "naturalist:firefly",
+    "group": "ambient",
+    "hostile": false
+  },
+  "457": {
+    "name": "naturalist:finch",
+    "group": "creature",
+    "hostile": false
+  },
+  "458": {
+    "name": "naturalist:giraffe",
+    "group": "creature",
+    "hostile": false
+  },
+  "459": {
+    "name": "naturalist:hippo",
+    "group": "creature",
+    "hostile": false
+  },
+  "460": {
+    "name": "naturalist:lion",
+    "group": "creature",
+    "hostile": false
+  },
+  "461": {
+    "name": "naturalist:lizard",
+    "group": "creature",
+    "hostile": false
+  },
+  "462": {
+    "name": "naturalist:lizard_tail",
+    "group": "creature",
+    "hostile": false
+  },
+  "463": {
+    "name": "naturalist:moose",
+    "group": "creature",
+    "hostile": false
+  },
+  "464": {
+    "name": "naturalist:rattlesnake",
+    "group": "creature",
+    "hostile": false
+  },
+  "465": {
+    "name": "naturalist:rhino",
+    "group": "creature",
+    "hostile": false
+  },
+  "466": {
+    "name": "naturalist:robin",
+    "group": "creature",
+    "hostile": false
+  },
+  "467": {
+    "name": "naturalist:snail",
+    "group": "creature",
+    "hostile": false
+  },
+  "468": {
+    "name": "naturalist:snake",
+    "group": "creature",
+    "hostile": false
+  },
+  "469": {
+    "name": "naturalist:sparrow",
+    "group": "creature",
+    "hostile": false
+  },
+  "470": {
+    "name": "naturalist:tortoise",
+    "group": "creature",
+    "hostile": false
+  },
+  "471": {
+    "name": "naturalist:vulture",
+    "group": "creature",
+    "hostile": false
+  },
+  "472": {
+    "name": "naturalist:zebra",
+    "group": "creature",
+    "hostile": false
+  },
+  "473": {
+    "name": "netherdepthsupgrade:lava_pufferfish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "474": {
+    "name": "netherdepthsupgrade:obsidianfish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "475": {
+    "name": "netherdepthsupgrade:searing_cod",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "476": {
+    "name": "netherdepthsupgrade:bonefish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "477": {
+    "name": "netherdepthsupgrade:wither_bonefish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "478": {
+    "name": "netherdepthsupgrade:blazefish",
+    "group": "ambient",
+    "hostile": false
+  },
+  "479": {
+    "name": "netherdepthsupgrade:magmacubefish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "480": {
+    "name": "netherdepthsupgrade:glowdine",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "481": {
+    "name": "netherdepthsupgrade:soulsucker",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "482": {
+    "name": "netherdepthsupgrade:fortressgrouper",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "483": {
+    "name": "netherdepthsupgrade:eyeball_fish",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "484": {
+    "name": "netherdepthsupgrade:lava_fishing_bobber",
+    "group": "water_ambient",
+    "hostile": false
+  },
+  "485": {
+    "name": "obscure_api:texture_fx",
+    "group": "misc",
+    "hostile": false
+  },
+  "486": {
+    "name": "oxidized:copper_golem",
+    "group": "misc",
+    "hostile": false
+  },
+  "487": {
+    "name": "paladins:barrier",
+    "group": "misc",
+    "hostile": false
+  },
+  "488": {
+    "name": "paladins:battle_banner",
+    "group": "misc",
+    "hostile": false
+  },
+  "489": {
+    "name": "powah:charged_snowball",
+    "group": "misc",
+    "hostile": false
+  },
+  "490": {
+    "name": "promenade:capybara",
+    "group": "creature",
+    "hostile": false
+  },
+  "491": {
+    "name": "promenade:duck",
+    "group": "creature",
+    "hostile": false
+  },
+  "492": {
+    "name": "promenade:lush_creeper",
+    "group": "monster",
+    "hostile": true
+  },
+  "493": {
+    "name": "promenade:sunken_skeleton",
+    "group": "monster",
+    "hostile": true
+  },
+  "494": {
+    "name": "railways:benchcart",
+    "group": "misc",
+    "hostile": false
+  },
+  "495": {
+    "name": "railways:jukeboxcart",
+    "group": "misc",
+    "hostile": false
+  },
+  "496": {
+    "name": "railways:conductor",
+    "group": "creature",
+    "hostile": false
+  },
+  "497": {
+    "name": "regions_unexplored:boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "498": {
+    "name": "regions_unexplored:chest_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "499": {
+    "name": "sbprom:hasturmagus",
+    "group": "misc",
+    "hostile": false
+  },
+  "500": {
+    "name": "sbprom:scarecrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "501": {
+    "name": "sbprom:scarecrow_mythic",
+    "group": "misc",
+    "hostile": false
+  },
+  "502": {
+    "name": "shield_overhaul:shield_bash_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "503": {
+    "name": "simplyskills:custom_entity_1",
+    "group": "creature",
+    "hostile": false
+  },
+  "504": {
+    "name": "simplyskills:dreadglare",
+    "group": "creature",
+    "hostile": false
+  },
+  "505": {
+    "name": "simplyskills:greater_dreadglare",
+    "group": "creature",
+    "hostile": false
+  },
+  "506": {
+    "name": "simplyskills:wraith",
+    "group": "creature",
+    "hostile": false
+  },
+  "507": {
+    "name": "simplyswords:battlestandard",
+    "group": "misc",
+    "hostile": false
+  },
+  "508": {
+    "name": "simplyswords:battlestandarddark",
+    "group": "misc",
+    "hostile": false
+  },
+  "509": {
+    "name": "simplyswords:simplybeeentity",
+    "group": "creature",
+    "hostile": false
+  },
+  "510": {
+    "name": "snifferplus:stone_pine_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "511": {
+    "name": "snifferplus:stone_pine_chest_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "512": {
+    "name": "soulsweapons:withered_demon",
+    "group": "monster",
+    "hostile": true
+  },
+  "513": {
+    "name": "soulsweapons:accursed_lord_boss",
+    "group": "monster",
+    "hostile": true
+  },
+  "514": {
+    "name": "soulsweapons:draugr_boss",
+    "group": "monster",
+    "hostile": true
+  },
+  "515": {
+    "name": "soulsweapons:night_shade",
+    "group": "monster",
+    "hostile": true
+  },
+  "516": {
+    "name": "soulsweapons:returning_knight",
+    "group": "monster",
+    "hostile": true
+  },
+  "517": {
+    "name": "soulsweapons:remnant",
+    "group": "creature",
+    "hostile": false
+  },
+  "518": {
+    "name": "soulsweapons:dark_sorcerer",
+    "group": "creature",
+    "hostile": false
+  },
+  "519": {
+    "name": "soulsweapons:big_chungus",
+    "group": "monster",
+    "hostile": true
+  },
+  "520": {
+    "name": "soulsweapons:soul_reaper_ghost",
+    "group": "creature",
+    "hostile": false
+  },
+  "521": {
+    "name": "soulsweapons:forlorn",
+    "group": "creature",
+    "hostile": false
+  },
+  "522": {
+    "name": "soulsweapons:evil_forlorn",
+    "group": "monster",
+    "hostile": true
+  },
+  "523": {
+    "name": "soulsweapons:soulmass",
+    "group": "creature",
+    "hostile": false
+  },
+  "524": {
+    "name": "soulsweapons:chaos_monarch",
+    "group": "monster",
+    "hostile": true
+  },
+  "525": {
+    "name": "soulsweapons:moonknight",
+    "group": "monster",
+    "hostile": true
+  },
+  "526": {
+    "name": "soulsweapons:frost_giant",
+    "group": "monster",
+    "hostile": true
+  },
+  "527": {
+    "name": "soulsweapons:rime_spectre",
+    "group": "monster",
+    "hostile": true
+  },
+  "528": {
+    "name": "soulsweapons:day_stalker",
+    "group": "monster",
+    "hostile": true
+  },
+  "529": {
+    "name": "soulsweapons:night_prowler",
+    "group": "monster",
+    "hostile": true
+  },
+  "530": {
+    "name": "soulsweapons:warmth_entity",
+    "group": "monster",
+    "hostile": true
+  },
+  "531": {
+    "name": "soulsweapons:moonlight_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "532": {
+    "name": "soulsweapons:big_moonlight_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "533": {
+    "name": "soulsweapons:dark_moon_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "534": {
+    "name": "soulsweapons:vertical_moonlight_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "535": {
+    "name": "soulsweapons:horizontal_moonlight_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "536": {
+    "name": "soulsweapons:sunlight_projectile_small",
+    "group": "misc",
+    "hostile": false
+  },
+  "537": {
+    "name": "soulsweapons:sunlight_projectile_big",
+    "group": "misc",
+    "hostile": false
+  },
+  "538": {
+    "name": "soulsweapons:vertical_sunlight_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "539": {
+    "name": "soulsweapons:swordspear_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "540": {
+    "name": "soulsweapons:comet_spear_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "541": {
+    "name": "soulsweapons:charged_arrow_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "542": {
+    "name": "soulsweapons:silver_bullet_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "543": {
+    "name": "soulsweapons:cannonball_entity_type",
+    "group": "misc",
+    "hostile": false
+  },
+  "544": {
+    "name": "soulsweapons:leviathan_axe_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "545": {
+    "name": "soulsweapons:mjolnir_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "546": {
+    "name": "soulsweapons:freyr_sword_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "547": {
+    "name": "soulsweapons:shadow_orb_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "548": {
+    "name": "soulsweapons:draupnir_spear_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "549": {
+    "name": "soulsweapons:area_effect_sphere",
+    "group": "misc",
+    "hostile": false
+  },
+  "550": {
+    "name": "soulsweapons:dragon_staff_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "551": {
+    "name": "soulsweapons:withered_wabbajack_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "552": {
+    "name": "soulsweapons:chaos_skull",
+    "group": "misc",
+    "hostile": false
+  },
+  "553": {
+    "name": "soulsweapons:chaos_orb_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "554": {
+    "name": "soulsweapons:growing_fireball",
+    "group": "misc",
+    "hostile": false
+  },
+  "555": {
+    "name": "soulsweapons:night_skull",
+    "group": "misc",
+    "hostile": false
+  },
+  "556": {
+    "name": "soulsweapons:fog_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "557": {
+    "name": "soulsweapons:blackflame_snake_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "558": {
+    "name": "soulsweapons:no_drag_wither_skull",
+    "group": "misc",
+    "hostile": false
+  },
+  "559": {
+    "name": "soulsweapons:death_spiral",
+    "group": "misc",
+    "hostile": false
+  },
+  "560": {
+    "name": "soulsweapons:nights_edge",
+    "group": "misc",
+    "hostile": false
+  },
+  "561": {
+    "name": "soulsweapons:night_wave",
+    "group": "misc",
+    "hostile": false
+  },
+  "562": {
+    "name": "soulsweapons:flame_pillar",
+    "group": "misc",
+    "hostile": false
+  },
+  "563": {
+    "name": "soulsweapons:kraken_slayer_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "564": {
+    "name": "soulsweapons:moonlight_arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "565": {
+    "name": "soulsweapons:arrow_storm_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "566": {
+    "name": "soulsweapons:holy_moonlight_pillar",
+    "group": "misc",
+    "hostile": false
+  },
+  "567": {
+    "name": "soulsweapons:warmup_lightning",
+    "group": "misc",
+    "hostile": false
+  },
+  "568": {
+    "name": "soulsweapons:ghost_glaive",
+    "group": "misc",
+    "hostile": false
+  },
+  "569": {
+    "name": "soulsweapons:moonveil_horizontal",
+    "group": "misc",
+    "hostile": false
+  },
+  "570": {
+    "name": "soulsweapons:moonveil_vertical",
+    "group": "misc",
+    "hostile": false
+  },
+  "571": {
+    "name": "soulsweapons:blackflame_explosion_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "572": {
+    "name": "soulsweapons:absorbed_projectiles_orb_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "573": {
+    "name": "soulsweapons:silver_arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "574": {
+    "name": "soulsweapons:frozen_lightning",
+    "group": "misc",
+    "hostile": false
+  },
+  "575": {
+    "name": "soulsweapons:chungus_head",
+    "group": "misc",
+    "hostile": false
+  },
+  "576": {
+    "name": "soulsweapons:air_combustion",
+    "group": "misc",
+    "hostile": false
+  },
+  "577": {
+    "name": "soulsweapons:molten_metal",
+    "group": "misc",
+    "hostile": false
+  },
+  "578": {
+    "name": "spell_engine:spell_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "579": {
+    "name": "spell_engine:spell_area_effect",
+    "group": "misc",
+    "hostile": false
+  },
+  "580": {
+    "name": "spellbladenext:magus",
+    "group": "misc",
+    "hostile": false
+  },
+  "581": {
+    "name": "spellbladenext:magister",
+    "group": "misc",
+    "hostile": false
+  },
+  "582": {
+    "name": "spellbladenext:hexbladeportal",
+    "group": "misc",
+    "hostile": false
+  },
+  "583": {
+    "name": "spellbladenext:rifleprojectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "584": {
+    "name": "spellbladenext:cycloneentity",
+    "group": "misc",
+    "hostile": false
+  },
+  "585": {
+    "name": "spellbladenext:smitelightning",
+    "group": "misc",
+    "hostile": false
+  },
+  "586": {
+    "name": "spellbladenext:redlaser",
+    "group": "misc",
+    "hostile": false
+  },
+  "587": {
+    "name": "swampier_swamps:dragonfly",
+    "group": "creature",
+    "hostile": false
+  },
+  "588": {
+    "name": "swampier_swamps:swamp_gas",
+    "group": "misc",
+    "hostile": false
+  },
+  "589": {
+    "name": "techreborn:nuke",
+    "group": "misc",
+    "hostile": false
+  },
+  "590": {
+    "name": "terraform:boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "591": {
+    "name": "terraform:chest_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "592": {
+    "name": "the_bumblezone:variant_bee",
+    "group": "creature",
+    "hostile": false
+  },
+  "593": {
+    "name": "the_bumblezone:honey_slime",
+    "group": "creature",
+    "hostile": false
+  },
+  "594": {
+    "name": "the_bumblezone:beehemoth",
+    "group": "creature",
+    "hostile": false
+  },
+  "595": {
+    "name": "the_bumblezone:bee_queen",
+    "group": "creature",
+    "hostile": false
+  },
+  "596": {
+    "name": "the_bumblezone:rootmin",
+    "group": "monster",
+    "hostile": true
+  },
+  "597": {
+    "name": "the_bumblezone:sentry_watcher",
+    "group": "misc",
+    "hostile": false
+  },
+  "598": {
+    "name": "the_bumblezone:pollen_puff",
+    "group": "misc",
+    "hostile": false
+  },
+  "599": {
+    "name": "the_bumblezone:dirt_pellet",
+    "group": "misc",
+    "hostile": false
+  },
+  "600": {
+    "name": "the_bumblezone:thrown_stinger_spear",
+    "group": "misc",
+    "hostile": false
+  },
+  "601": {
+    "name": "the_bumblezone:bee_stinger",
+    "group": "misc",
+    "hostile": false
+  },
+  "602": {
+    "name": "the_bumblezone:honey_crystal_shard",
+    "group": "misc",
+    "hostile": false
+  },
+  "603": {
+    "name": "the_bumblezone:electric_ring_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "604": {
+    "name": "the_bumblezone:purple_spike_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "605": {
+    "name": "the_bumblezone:cosmic_crystal_entity",
+    "group": "misc",
+    "hostile": false
+  },
+  "606": {
+    "name": "tinyskeletons:baby_skeleton",
+    "group": "monster",
+    "hostile": true
+  },
+  "607": {
+    "name": "tinyskeletons:baby_wither_skeleton",
+    "group": "monster",
+    "hostile": true
+  },
+  "608": {
+    "name": "tinyskeletons:baby_stray",
+    "group": "monster",
+    "hostile": true
+  },
+  "609": {
+    "name": "travelersbackpack:backpack",
+    "group": "misc",
+    "hostile": false
+  },
+  "610": {
+    "name": "twigs:pebble",
+    "group": "misc",
+    "hostile": false
+  },
+  "611": {
+    "name": "vinery:dark_cherry_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "612": {
+    "name": "vinery:dark_cherry_chest_boat",
+    "group": "misc",
+    "hostile": false
+  },
+  "613": {
+    "name": "vinery:mule",
+    "group": "creature",
+    "hostile": false
+  },
+  "614": {
+    "name": "vinery:wandering_winemaker",
+    "group": "creature",
+    "hostile": false
+  },
+  "615": {
+    "name": "vinery:chair",
+    "group": "misc",
+    "hostile": false
+  },
+  "616": {
+    "name": "ae2:tiny_tnt_primed",
+    "group": "misc",
+    "hostile": false
+  },
+  "617": {
+    "name": "amendments:medium_dragon_fireball",
+    "group": "misc",
+    "hostile": false
+  },
+  "618": {
+    "name": "amendments:medium_fireball",
+    "group": "misc",
+    "hostile": false
+  },
+  "619": {
+    "name": "amendments:ring_effect_cloud",
+    "group": "misc",
+    "hostile": false
+  },
+  "620": {
+    "name": "amendments:falling_lantern",
+    "group": "misc",
+    "hostile": false
+  },
+  "621": {
+    "name": "dummmmmmy:target_dummy",
+    "group": "misc",
+    "hostile": false
+  },
+  "622": {
+    "name": "supplementaries:pearl_marker",
+    "group": "misc",
+    "hostile": false
+  },
+  "623": {
+    "name": "supplementaries:dispenser_minecart",
+    "group": "misc",
+    "hostile": false
+  },
+  "624": {
+    "name": "supplementaries:hat_stand",
+    "group": "misc",
+    "hostile": false
+  },
+  "625": {
+    "name": "supplementaries:red_merchant",
+    "group": "creature",
+    "hostile": false
+  },
+  "626": {
+    "name": "supplementaries:falling_urn",
+    "group": "misc",
+    "hostile": false
+  },
+  "627": {
+    "name": "supplementaries:falling_ash",
+    "group": "misc",
+    "hostile": false
+  },
+  "628": {
+    "name": "supplementaries:falling_sack",
+    "group": "misc",
+    "hostile": false
+  },
+  "629": {
+    "name": "supplementaries:brick_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "630": {
+    "name": "supplementaries:slimeball_projectile",
+    "group": "misc",
+    "hostile": false
+  },
+  "631": {
+    "name": "supplementaries:bomb",
+    "group": "misc",
+    "hostile": false
+  },
+  "632": {
+    "name": "supplementaries:cannonball",
+    "group": "misc",
+    "hostile": false
+  },
+  "633": {
+    "name": "supplementaries:rope_arrow",
+    "group": "misc",
+    "hostile": false
+  },
+  "634": {
+    "name": "supplementaries:slingshot_projectile",
+    "group": "misc",
+    "hostile": false
+  }
+}

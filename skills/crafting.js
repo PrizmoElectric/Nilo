@@ -7,7 +7,7 @@
 //   Natural language: "craft a pickaxe", "smelt the iron ore", "make a chest"
 
 const Vec3  = require('vec3');
-const { goals: { GoalNear, GoalBlock } } = require('mineflayer-pathfinder');
+const { goals: { GoalNear, GoalBlock } } = require('../pathfinder-compat');
 const state = require('../state');
 const { createMovements } = require('../movement');
 

@@ -14,7 +14,8 @@ const CHROME = '/home/prizmo/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-
 const SOURCE_URL = 'http://localhost:3009/'; // first-person viewer (internal)
 const WIDTH  = 854;
 const HEIGHT = 480;
-const FPS_MS = 333; // ~3 fps
+const FPS_MS      = 333;  // ~3 fps when clients connected
+const IDLE_FPS_MS = 1000; // 1 fps when nobody is watching
 
 const HTML = `<!DOCTYPE html>
 <html>
@@ -89,11 +90,43 @@ async function startBrowser() {
   await page.goto(SOURCE_URL, { waitUntil: 'networkidle0', timeout: 30000 });
   // Wait for chunks to stream in and WebGL scene to render
   await new Promise(r => setTimeout(r, 10000));
+
+  // Throttle requestAnimationFrame so SwiftShader renders at our screenshot
+  // rate instead of 60fps. Without this, the GPU process burns 12+ CPU cores
+  // doing software rendering nobody ever sees between screenshots.
+  await page.evaluate((activeMs, idleMs) => {
+    const _raf = window.requestAnimationFrame.bind(window);
+    let lastFire = 0;
+    window.__setStreamRate = (ms) => { window.__rafMs = ms; };
+    window.__setStreamRate(idleMs);
+    window.requestAnimationFrame = function (cb) {
+      const now    = performance.now();
+      const delay  = Math.max(0, (window.__rafMs || idleMs) - (now - lastFire));
+      setTimeout(() => {
+        lastFire = performance.now();
+        _raf(cb);
+      }, delay);
+    };
+  }, FPS_MS, IDLE_FPS_MS);
+
   console.log('[STREAM] Headless Chrome opened', SOURCE_URL);
+}
+
+async function setRafRate(ms) {
+  if (page) await page.evaluate((ms) => window.__setStreamRate?.(ms), ms).catch(() => {});
 }
 
 async function captureLoop() {
   if (!page) return;
+
+  if (clients.size === 0) {
+    // No viewers — slow render loop to near-idle to save CPU
+    await setRafRate(IDLE_FPS_MS);
+    timer = setTimeout(captureLoop, IDLE_FPS_MS);
+    return;
+  }
+
+  await setRafRate(FPS_MS);
   try {
     const buf = await page.screenshot({ type: 'jpeg', quality: 60 });
     for (const ws of clients) {

@@ -1,8 +1,118 @@
-SESSION RESUME — 2026-05-29 (session 10)
+SESSION RESUME — 2026-08-05 (session 17)
 =============================================
 Pending items: agent/CHECKLIST.txt
 Full architecture: agent/map.txt
 Detailed history: agent/CHANGELOG.txt
+
+── CURRENT SESSION (2026-08-05, session 17) ───────────────────────────────────
+
+  Objective pivot: stop chasing new features, audit what's already claimed
+  as built and fix what's actually broken — several "done" mechanics turned
+  out not to work. NOTHING below has been live-tested yet — see
+  CHECKLIST.txt's new "SESSION 17" section for the full test punch list.
+  Highlights:
+
+  - Totem fix: was reactive (only tried to equip below a health threshold,
+    only inside attack/assist mode) — too late for most real deaths and
+    dead outside active combat. Replaced with mineflayer-totem-auto
+    (proactive, physicsTick-based, npm package — vetted source before
+    installing). Dead reactive code removed from combat.js.
+  - Possession mode (remote-control.js, driven by prizmo-system's
+    BotSneakScreen): was already correctly built, but stopRemoteControl()
+    was never called on disconnect — its module-level poll guard stayed
+    stuck pointing at the dead bot object after any reconnect, silencing
+    possession for the rest of the process with no error logged. Fixed by
+    wiring it into nilo.js's bot.on('end', ...).
+  - Full pathfinder engine swap: mineflayer-pathfinder (unmaintained since
+    2023) → @miner-org/mineflayer-baritone, across all 27 files that touched
+    it. Built pathfinder-compat.js, a shim reproducing the old API
+    (setGoal/goto/setMovements/.goal/.movements/.stop, Movements,
+    GoalNear/GoalBlock/GoalFollow with old constructor signatures) backed by
+    the new engine, so ~150+ call sites needed only an import-line change
+    instead of bespoke rewrites. Along the way: caught GoalFollowEntity
+    isn't actually exported by the new library (built GoalFollow on GoalNear
+    instead, matching how the library's own follow helper works internally)
+    and found mineflayer-collectblock is incompatible with the new engine
+    (constructs goals from its own bundled OLD pathfinder, calls a Movements
+    method the shim doesn't have) — replaced its 3 real call sites with a
+    new collectBlock(bot, block) helper in movement.js, removed the plugin.
+    mineflayer-tool's equipForBlock has the same latent risk on an
+    unconfirmed-unused code path — flagged, not fixed.
+  - mineflayer-spectator wired in (nilo.js) — real-MC-client camera-follow
+    spectate, port 25566, password nilo123, reconnect-safe (previous server
+    instance is closed before a new one starts on each reconnect — same bug
+    class as the possession fix, caught proactively this time).
+  - Command prefix: renamed !/!nilo → #/#nilo everywhere (in-game chat,
+    Discord bridge, MANUAL.txt). More importantly, changed the actual
+    behavior: commands/index.js's handleNaturalCommand now REQUIRES
+    prefixed:true to match anything at all — "quick" commands (follow, sit,
+    mine this, etc.) used to fire on bare natural language with no prefix,
+    which was the real source of accidental activation during casual chat.
+    Local CLI and prizmo-system's terminal command box are deliberately
+    exempted (dedicated command consoles, not casual chat).
+  - Passwords (NILO_PASSWORD/SPECTATOR_PASSWORD) reviewed: both currently
+    fall back to a hardcoded 'nilo123' literal in committed source (this
+    repo has a GitHub remote) since .env doesn't set either. User chose to
+    leave as-is (home LAN only, not port-forwarded) — revisit if that
+    network exposure ever changes.
+
+── PREVIOUS SESSION (2026-06-07, session 16) ──────────────────────────────────
+
+  Clone army polish — formation, real skins, Solsai-based inventory
+  management, HUD integration, "clone N" resizing. See CHANGELOG for full
+  details. Highlights:
+
+  - Replaced GoalFollow (made every clone converge on one point and stack
+    "inside each other") with a stable per-index ring formation around Nilo
+    (bot._formationAngle) plus mutual personal-space avoidance — verified
+    spread-out (~1.75-8 blocks apart across 6 clones).
+  - Fixed clone skins: "/skin set <url>" silently failed because
+    mineskin.org can't reach the LAN-only IP 192.168.1.100. Switched to
+    FabricTailor's "/skin set upload slim <server-side path>" (reads the
+    PNG straight off the MC server's disk — found via decompiling
+    fabrictailor-2.1.2.jar). Verified texture hash matches Nilo's real skin.
+  - Refactored Freyr Sword distribution AND added new bread/food
+    distribution, both via Solsai's instant /item-transfer (server-side
+    inventory-to-inventory move) instead of the old toss+/tp+pickup dance —
+    no more manual supply, nothing can be lost/stolen by mobs en route.
+    Each clone gets topped up to ~16 bread once it drops to <=10.
+  - HUD fix: clones were always showing as 'idle'/wrong-color in
+    prizmo-system because nothing pushed their behavior mode to Solsai.
+    Generalized api.js's pushModeToSolsai(mode) -> (player, mode) and added
+    a 2s poll in clones.js pushing each clone's live mode — ESP colors and
+    inventory peek now work for the whole army.
+  - "clone N" now resizes the army in both directions: requesting fewer
+    clones than currently spawned disbands the highest-indexed ones first
+    (retracting Freyr Swords first). User/linter follow-up same session
+    extended this to accept "clone 0" as a full stand-down without
+    deactivating clone mode.
+  - MANUAL.txt's EXÉRCITO DE CLONES section rewritten to document all of
+    the above in Portuguese.
+
+── PREVIOUS SESSION (2026-06-07, session 15) ─────────────────────────────────
+
+  Freyr Sword reliability pass. See CHANGELOG for full details. Highlights:
+
+  - Diagnosed why "activate freyr" / "freir return" did nothing but Nilo
+    chatted as if they worked: commands/freyr.js was never registered in
+    commands/index.js's handler list (clone-army commit added the file but
+    not the wiring), and the "freir" typo bypassed the `includes('freyr')`
+    gate — both fell through to Letta, which fabricated plausible-sounding
+    fake confirmations. The router-wiring fix is already uncommitted in the
+    working tree and live since the 01:01 restart — STILL NEEDS COMMITTING.
+    The typo-tolerance fix is NOT yet done (see CHECKLIST).
+  - Added freyr.retractBeforeDisconnect(bot) — silently recalls the sword
+    before every controlled logoff (chat leave/disconnect, !nilo quit,
+    nilo stop/restart via SIGTERM/SIGINT). Fixes the root cause of the
+    "Nilo thinks his sword is summoned but it's not really his" stuck state
+    (UUID binding never clears, so a sword left out across a logout gets
+    bound to forever on the next login).
+  - Added freyr.findStraySwords() + a ~30s scan in monitor.js's autonomous
+    loop — flags freyr_sword_entity nearby that aren't Nilo's and don't
+    belong to any online clone (i.e. likely abandoned by a dead/disconnected
+    clone). Logs to freyr.log only, no chat.
+  - "clone 0" is now valid — disbands the whole army without deactivating
+    clone mode (was previously floored to spawn 1 clone). MANUAL.txt updated.
 
 ── STANDARD NILO COMMANDS ────────────────────────────────────────────────────
 
@@ -25,115 +135,49 @@ Detailed history: agent/CHANGELOG.txt
   (Nilo v2 Python rewrite is a separate parallel project, still pending.)
   Zote is a separate Python bot by the same user — see /home/prizmo/zote.
 
-── CURRENT SESSION (2026-05-29, session 10) ──────────────────────────────────
+── CURRENT SESSION (2026-06-06, session 14) ──────────────────────────────────
 
-  Viewer system overhaul + Phase 3 texture improvements.
+  Bug fixes — wander leash, grave detection, behavior persistence.
 
-  PORT LAYOUT:
-    3007 → desktop 3D viewer (third-person orbit, 4096 atlas)
-    3009 → internal first-person source (used by Puppeteer only)
-    3006 → mobile screenshot stream (Puppeteer renders 3009, streams JPEG at 3fps)
-    3000 → inventory viewer
+  WANDER LEASH (monitor.js, commands/navigation.js, nilo.js):
+  - Nilo no longer wanders when MASTER is offline or >30 blocks away.
+  - Guard added to all three wander sources: autonomous exploration (monitor.js),
+    "wander" command interval (navigation.js), and wander restoration on spawn (nilo.js).
+  - Autonomous exploration step capped at ±10 blocks (was ±20).
+  - Root cause: wander picks random offset from current pos every few seconds —
+    compounds unboundedly over time. Now halts unless MASTER is nearby.
 
-  MOBILE STREAM (port 3006):
-  - Puppeteer (headless Chrome 149) opens port 3009, takes screenshots every 333ms
-  - Uses --use-angle=swiftshader + headless:'new' for WebGL without physical GPU
-  - Streams JPEG frames via WebSocket — phone just displays image, no GPU needed
-  - 8s warm-up wait after page load before first frame
-  - Restarts once on bot spawn (streamStarted guard prevents duplicates)
-  - mobile-stream.js, CHROME path: ~/.cache/puppeteer/chrome/linux-149.0.7827.22/
+  GRAVE BUG FIX (activities.js):
+  - isGraveBlock() catch-all for unnamed/unknown blocks now only fires when
+    yigd:grave couldn't be resolved (graveBlockId === null).
+  - Previously matched any solid block with an empty name — including gravel
+    variants with unresolved stateIds. Nilo was walking to gravel thinking it
+    was his grave.
 
-  PHASE 3 TEXTURE BUILD (build-mod-textures.js):
-  - Root cause found: unzip glob 'textures/block/*.png' missed subdirectories.
-    TechReborn ores in block/ore/, Chipped in block/acacia_planks/, etc.
-  - Fixes: recursive extraction (4 depth levels), walkModels/walkTextures with
-    correct modid:block/subdir/name keys, vanilla backup as base (not 500MB output),
-    element cap (>2 → fallback), variant-aware fallbacks (invisible doors/stairs fixed),
-    stream-write JSON to avoid V8 string length limit.
-  - Result: 5,019 → 13,420 real textures (2.7×), 4,017 colored fallbacks.
-  - Atlas: 7,239 KB (4096×4096), mobile: 2,406 KB (2048×2048).
-  - Remaining fallbacks: Chipped (complex multi-element models), FarmersDelight,
-    Vinery — these need investigation.
+  BEHAVIOR PERSISTENCE FIX (persist.js, nilo.js):
+  - persist.js: saveBehavior() now also saves exploringEnabled from state.
+    loadBehavior() returns it. exploringEnabled is restored on spawn.
+  - Bug fixed: exploringEnabled always reset to true on reboot (state.js default),
+    so Nilo would start autonomous exploring even after "stop exploring."
+  - Bug fixed: saved mode 'idle' (from "stay") now suppresses auto-follow on
+    reboot. Previously skipAutoFollow only checked sit/defensive/passive, so
+    "stay" → reboot → Nilo immediately followed when MASTER appeared.
+  - Bug fixed: wander restoration in spawn now has the 30-block MASTER guard.
 
-  NILO SKIN:
-  - SerialDesignation_N-V2.png replaces Steve in viewer.
-  - Source: /home/prizmo/mc-prominence2/data/SerialDesignation_N-V2.png
-  - Deployed: node_modules/prismarine-viewer/public/textures/1.16.4/entity/steve.png
-  - Backup: nilo-assets/nilo-skin.png (redeploy after npm install)
+  PENDING (carried from session 13):
+  - prizmo-system 0.1.14 jar needs to be deployed to Apollo's mods folder.
+  - DuckDNS: waiting for token.
+  - Self-bot Discord: waiting for token.
+  - Config screen for prizmo-system: needs ModMenu API dependency.
+  - Mirror mode spatial rewrite: needs user decision (fixed vs dynamic plane).
 
-  SYSTEMD + CLI (session 10 early):
-  - ~/.config/systemd/user/nilo.service — enabled, linger=yes
-  - /home/prizmo/.local/bin/nilo — shell dispatcher (start/stop/restart/status/logs)
-  - /home/prizmo/.local/bin/nilo-chat — original chat REPL
-  - Fish functions updated: nilo_begin/stop/restart/status/logs → systemctl
-  - nilo_logs → journalctl --user -u nilo -f
+── PREVIOUS SESSION (2026-06-06, session 13) ─────────────────────────────────
 
-  SPIN COMMAND (commands/physical.js):
-  - spin / spinl → 360° left (default)
-  - spinr → 360° right
-  - spin 90 / spinr 180 → custom degrees (max 1080°)
+  Major checklist pass — prizmo-system HUD mod + Nilo bot features. See CHANGELOG.
 
-── PREVIOUS SESSION (2026-05-28–29, session 8) ───────────────────────────────
-
-  Block learning, CLI session, bug fixes, status/stats commands.
-
-  Auto-mapper reconnect fix (registry-patch.js):
-  - Root bug: vanillaMax recomputed from already-patched registry on reconnect
-    (Node module cache shares registry object). Gave 616281 instead of 24134,
-    excluding all modded stateIds from gap analysis forever.
-  - Fix 1: `if (!vanillaMax)` guard — computed only once at first clean spawn.
-  - Fix 2: removed `!bot.registry.blocksByStateId[id]` from resolveMapping
-    filter — was silently excluding all already-patched IDs on reconnect.
-  - Confirmed working: all reconnects now show vanillaMax=24134 in registry.log.
-
-  Ground-truth block learning (context-mod-client.js, new):
-  - Zote's server-side Fabric mod extended: GET /blocknames?sids=n1,n2,...
-    returns {"stateId":"blockName"} using Block.STATE_IDS + Registries.BLOCK.
-  - context-mod-client.js polls every 15s, batches 200 sids per request.
-  - applyGroundTruth() in registry-patch: 'ground_truth' confidence, logs
-    every mismatch with gap analysis. Confirmed: 1000-1077 corrections/session.
-  - Fabric mod rebuilt as v1.1.0 and deployed to server mods folder.
-
-  Terminal CLI session (nilo-cli.js):
-  - WebSocket server (ws://localhost:4000) in nilo.js replaces old HTTP API.
-  - bot.chat() monkey-patched on login to forward replies to CLI clients.
-  - /home/prizmo/.local/bin/nilo — interactive chat REPL with colored output,
-    auto-reconnects after Nilo restart (retries every 3s).
-
-  New commands (commands/misc.js):
-  - "this is <mod:name>": sets manual override for gaze-target stateId.
-  - "status": pings Letta, context mod, viewers, reports mapper stats,
-    behavior, position, server. All checks run in parallel.
-  - "stats": health as X%  (current/max, real max from generic.max_health
-    attribute — correct for modpack-expanded health pools), hunger %,
-    armor defense points (from generic.armor attribute), XP level.
-  - "restart" → "Restarting..." / "reboot" → "Rebooting..." (distinct msgs).
-
-  Navigation (commands/navigation.js):
-  - "tp <p1> to <p2>": general handler. Resolves "me"→MASTER, "you"→NILO.
-    Placed before IS_TP_TO_ME to prevent "tp me to Zote" misfiring.
-
-  Follow behavior (movement.js):
-  - >100 blocks from master while following → teleports instead of pathfinding.
-  - Door spam fix: 2-block tall doors shared one cooldown via base-y key
-    (x, floor(y/2), z). Old per-block 0.8s cooldown caused infinite loop
-    alternating between upper and lower halves. Now 3s shared cooldown.
-
-  Chat filter (nilo.js):
-  - Messages starting with "!" (not "!nilo") silently dropped.
-
-  Browser views (viewer.js):
-  - prismarine-viewer: 3D world view → http://localhost:3007
-  - mineflayer-web-inventory: inventory → http://localhost:3000
-  - World viewer now closes old instance before restart (port release + 300ms
-    wait). Inventory viewer auto-stops on bot.end. Both restart cleanly.
-  - Accessible via Tailscale IP directly (servers bind 0.0.0.0).
-
-── PREVIOUS SESSION (2026-05-25, session 7) ──────────────────────────────────
-
-  Planning session — mirror feature design.
-  Decision: server-side Fabric mod intercepts C2S packets, forwards to Nilo
-  via WebSocket. NOT YET IMPLEMENTED — in CHECKLIST.txt.
+  Solsai 1.8.0, prizmo-system 0.1.14 HUD, navigation location commands,
+  diggingCompleted ground-truth learning, api.js mode push to Solsai.
+  See CHANGELOG for full details.
 
 ── DEFERRED ──────────────────────────────────────────────────────────────────
 

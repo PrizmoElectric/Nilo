@@ -4,9 +4,18 @@ const { MASTER } = require('../config');
 const { cmd } = require('./_util');
 
 const IS_JUMP = cmd([/\bjump(?: \d+ times?)?\b/, /\bpula(?: \d+ vezes?)?\b/]);
+// Precise distance stepping ("step 2 forward" / "step forward 2 blocks") —
+// checked before IS_MOVE_DIR below since "step forward 2" would otherwise
+// also match that looser, time-based pattern.
+const IS_STEP_DIST = cmd([
+  /\bstep\s+\d+\s+(?:fo(?:r)?ward|back(?:wards)?|left|right)\b/i,
+  /\bstep\s+(?:fo(?:r)?ward|back(?:wards)?|left|right)\s+\d+\b/i,
+  /\bpassos?\s+\d+\s+para\s+(?:frente|tr[aá]s|(?:a\s+)?esquerda|(?:a\s+)?direita)\b/i,
+  /\bandar?\s+\d+\s+passos?\s+para\s+(?:frente|tr[aá]s|(?:a\s+)?esquerda|(?:a\s+)?direita)\b/i,
+]);
 const IS_MOVE_DIR = cmd([
-  /\bmove (?:forward|backwards?|left|right)\b/,
-  /\b(?:go|walk|step) (?:forward|backwards?|left|right)\b/,
+  /\bmove (?:fo(?:r)?ward|backwards?|left|right)\b/,
+  /\b(?:go|walk|step) (?:fo(?:r)?ward|backwards?|left|right)\b/,
   /\banda (?:para frente|para tr[aá]s|para (?:a )?esquerda|para (?:a )?direita)\b/,
   /\bv[aá] (?:para frente|para tr[aá]s|para (?:a )?esquerda|para (?:a )?direita)\b/,
 ]);
@@ -23,8 +32,8 @@ const IS_STAND  = cmd([
   /\blevanta\b/, /\bpara de agachar\b/, /\bfica em p[eé]\b/,
 ]);
 const IS_LOOK_DIR = cmd([
-  /\blook (?:up|down|north|south|east|west)\b/,
-  /\bolha (?:para cima|para baixo|para o norte|para o sul|para o leste|para o oeste)\b/,
+  /\blook (?:up|down|north|south|east|west|left|right)\b/,
+  /\bolha (?:para cima|para baixo|para o norte|para o sul|para o leste|para o oeste|para (?:a )?esquerda|para (?:a )?direita)\b/,
 ]);
 const IS_LOOK_AT_ME_TIMED = cmd([
   /\blook at me for \d+/,
@@ -50,9 +59,48 @@ async function handle(bot, lower, raw) {
     return true;
   }
 
+  if (IS_STEP_DIST(lower)) {
+    const numMatch = lower.match(/\d+/);
+    const blocks = numMatch ? Math.min(parseInt(numMatch[0]), 20) : 1;
+
+    let dir = null;
+    if (/fo(?:r)?ward|frente/.test(lower))        dir = 'forward';
+    else if (/back|tr[aá]s/.test(lower))     dir = 'back';
+    else if (/left|esquerda/.test(lower))    dir = 'left';
+    else if (/right|direita/.test(lower))    dir = 'right';
+    if (!dir) return false;
+
+    bot.chat(`*steps ${blocks} block${blocks === 1 ? '' : 's'} ${dir}*`);
+    bot.pathfinder.setGoal(null);
+    bot.clearControlStates();
+
+    const startPos = bot.entity.position.clone();
+    bot.setControlState(dir, true);
+
+    const restoreSneak = () => { if (state.isSneaking) bot.setControlState('sneak', true); };
+
+    const checkInterval = setInterval(() => {
+      if (bot.entity.position.distanceTo(startPos) >= blocks) {
+        clearInterval(checkInterval);
+        clearTimeout(safety);
+        bot.clearControlStates();
+        restoreSneak();
+      }
+    }, 50);
+
+    // Safety timeout in case something blocks the path (wall, gap, etc.)
+    const safety = setTimeout(() => {
+      clearInterval(checkInterval);
+      bot.clearControlStates();
+      restoreSneak();
+    }, blocks * 1500 + 2000);
+
+    return true;
+  }
+
   if (IS_MOVE_DIR(lower)) {
     let dir = null;
-    if (/forward|frente/.test(lower))        dir = 'forward';
+    if (/fo(?:r)?ward|frente/.test(lower))        dir = 'forward';
     else if (/back|tr[aá]s/.test(lower))     dir = 'back';
     else if (/left|esquerda/.test(lower))    dir = 'left';
     else if (/right|direita/.test(lower))    dir = 'right';
@@ -147,6 +195,31 @@ async function handle(bot, lower, raw) {
   }
 
   if (IS_LOOK_DIR(lower)) {
+    const word = lower.match(/\b(up|down|north|south|east|west|left|right|cima|baixo|norte|sul|leste|oeste|esquerda|direita)\b/)?.[1];
+    if (!word) return false;
+    const numMatch = lower.match(/(\d+)/);
+    const degrees  = numMatch ? Math.min(parseInt(numMatch[1]), 180) : null;
+
+    // left/right have no absolute compass equivalent — always relative to
+    // current facing, same yaw convention as IS_SPIN (left = +yaw).
+    if (word === 'left' || word === 'esquerda' || word === 'right' || word === 'direita') {
+      const dir = (word === 'left' || word === 'esquerda') ? 1 : -1;
+      const deg = degrees ?? 90;
+      const newYaw = bot.entity.yaw + dir * deg * Math.PI / 180;
+      bot.look(newYaw, bot.entity.pitch, false).catch(() => {});
+      return true;
+    }
+
+    // "look up 30" / "look down 20" — relative pitch delta by N degrees.
+    // Bare "look up"/"look down" (no number) keeps the old fixed extreme
+    // angle below, unchanged.
+    if (degrees != null && (word === 'up' || word === 'cima' || word === 'down' || word === 'baixo')) {
+      const dir = (word === 'up' || word === 'cima') ? -1 : 1;
+      const newPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, bot.entity.pitch + dir * degrees * Math.PI / 180));
+      bot.look(bot.entity.yaw, newPitch, false).catch(() => {});
+      return true;
+    }
+
     const DIRS = {
       up: [null, -1.4], down: [null, 1.4],
       north: [Math.PI, 0], south: [0, 0],
@@ -155,8 +228,7 @@ async function handle(bot, lower, raw) {
       norte: [Math.PI, 0], sul: [0, 0],
       leste: [-Math.PI / 2, 0], oeste: [Math.PI / 2, 0],
     };
-    const word = lower.match(/\b(up|down|north|south|east|west|cima|baixo|norte|sul|leste|oeste)\b/)?.[1];
-    if (word && DIRS[word]) {
+    if (DIRS[word]) {
       const [yaw, pitch] = DIRS[word];
       bot.look(yaw ?? bot.entity.yaw, pitch, false).catch(() => {});
     }

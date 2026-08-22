@@ -61,13 +61,26 @@ async function installViewers(bot) {
   }
 
   // ── Inventory viewer ──────────────────────────────────────────────────────
-  // mineflayer-web-inventory auto-stops on bot.end, so port 3000 is free.
-  try {
-    const inventoryViewer = require('mineflayer-web-inventory');
-    await inventoryViewer(bot, { port: INVENTORY_PORT });
-    console.log(`[VIEWER] Inventory view  → http://localhost:${INVENTORY_PORT}`);
-  } catch (err) {
-    console.error('[VIEWER] Inventory viewer failed:', err.message);
+  // mineflayer-web-inventory doesn't add an error listener to its HTTP server,
+  // so EADDRINUSE escapes as an uncaught exception and kills the process.
+  // Pre-check the port with a probe so we skip gracefully if occupied.
+  const net = require('net');
+  const portFree = await new Promise(resolve => {
+    const probe = net.createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => { probe.close(); resolve(true); });
+    probe.listen(INVENTORY_PORT);
+  });
+  if (!portFree) {
+    console.warn(`[VIEWER] Inventory port ${INVENTORY_PORT} already in use, skipping.`);
+  } else {
+    try {
+      const inventoryViewer = require('mineflayer-web-inventory');
+      await inventoryViewer(bot, { port: INVENTORY_PORT });
+      console.log(`[VIEWER] Inventory view  → http://localhost:${INVENTORY_PORT}`);
+    } catch (err) {
+      console.error('[VIEWER] Inventory viewer failed:', err.message);
+    }
   }
 }
 

@@ -1,12 +1,30 @@
 const Vec3 = require('vec3');
-const { goals: { GoalBlock, GoalNear } } = require('mineflayer-pathfinder');
+const { goals: { GoalBlock, GoalNear } } = require('../pathfinder-compat');
 const state  = require('../state');
 const { setBehavior } = require('../behavior');
 const { createMovements, startFollow, tryUnstuck } = require('../movement');
 const { startAssist } = require('../combat');
-const { MASTER } = require('../config');
+const { MASTER, getActiveServerName } = require('../config');
 const { cmd } = require('./_util');
 const { getPlayerGazeTarget } = require('../gaze');
+const db = require('../db');
+
+// ── Location DB helpers ───────────────────────────────────────────────────────
+const stmtSaveLoc    = db.prepare('INSERT INTO locations (x, y, z, label, notes) VALUES (?, ?, ?, ?, ?)');
+const stmtGetLoc     = db.prepare("SELECT * FROM locations WHERE LOWER(label) = LOWER(?) ORDER BY created_at DESC LIMIT 1");
+const stmtListLocs   = db.prepare('SELECT label, x, y, z FROM locations ORDER BY created_at DESC LIMIT 20');
+const stmtNearLoc    = db.prepare('SELECT *, ((x-?)*(x-?) + (z-?)*(z-?)) AS dist2 FROM locations ORDER BY dist2 ASC LIMIT 1');
+const stmtDeleteLoc  = db.prepare("DELETE FROM locations WHERE LOWER(label) = LOWER(?)");
+const stmtCpSave     = db.prepare('INSERT INTO checkpoints (server, dimension, label, x, y, z) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(server, dimension, label) DO UPDATE SET x=excluded.x, y=excluded.y, z=excluded.z, created_at=strftime(\'%s\',\'now\')');
+const stmtCpGet      = db.prepare('SELECT x, y, z FROM checkpoints WHERE server=? AND dimension=? AND label=? COLLATE NOCASE');
+const stmtCpDel      = db.prepare('DELETE FROM checkpoints WHERE server=? AND dimension=? AND label=? COLLATE NOCASE');
+const stmtCpList     = db.prepare('SELECT label, x, y, z FROM checkpoints WHERE server=? AND dimension=? ORDER BY label ASC');
+
+const CP_SET  = /(?:set|save|mark|salvar?|marcar?|definir?)\s+(?:checkpoint|cp|waypoint|ponto|marco)\s+(.+)/;
+const CP_TP   = /(?:tp|teleport|teleporta(?:-te)?|vai\s+para?)\s+(?:(?:to\s+)?(?:checkpoint|cp|waypoint|ponto|marco))\s+(.+)/;
+const CP_TMP  = /(?:tp\s+me|me\s+(?:tp|teleporta|leva))\s+(?:to\s+)?(?:checkpoint|cp|waypoint|ponto|marco)\s+(.+)/;
+const CP_DEL  = /(?:delete|remove|del|apagar?|remover?)\s+(?:checkpoint|cp|waypoint|ponto|marco)\s+(.+)/;
+const CP_LIST = /(?:list|show|listar?|mostrar?)\s+(?:checkpoints|waypoints|pontos|marcos|cps?)\b/;
 
 const IS_FOLLOW = cmd([
   /\bfollow\b/,
@@ -66,8 +84,9 @@ const IS_EXPLORE = cmd([
   /\bvai explorar\b/, /\bcome[cç]a a explorar\b/, /\bexplora\b/,
 ]);
 
-async function handle(bot, lower, raw) {
+async function handle(bot, lower, raw, username) {
   if (IS_FOLLOW(lower)) {
+    state.exploringEnabled = true;
     startFollow(bot, MASTER, 2);
     bot.chat('On my way.');
     return true;
@@ -80,6 +99,7 @@ async function handle(bot, lower, raw) {
 
   if (IS_COME(lower)) {
     setBehavior(bot, 'idle', MASTER);
+    state.exploringEnabled = false; // hold position after arriving — user is directing
     const target = bot.players[MASTER]?.entity;
     if (target) {
       const movements = createMovements(bot);
@@ -149,6 +169,8 @@ async function handle(bot, lower, raw) {
     bot.pathfinder.setMovements(movements);
     state.behaviorInterval = setInterval(() => {
       if (state.behaviorMode !== 'wander') return;
+      const masterForWander = bot.players[MASTER]?.entity;
+      if (!masterForWander || masterForWander.position.distanceTo(bot.entity.position) > 30) return;
       const pos = bot.entity.position;
       const rx  = pos.x + (Math.random() * 20 - 10);
       const rz  = pos.z + (Math.random() * 20 - 10);
@@ -159,6 +181,7 @@ async function handle(bot, lower, raw) {
 
   const tpMatch = TP_PLAYER_TO_PLAYER.exec(lower);
   if (tpMatch) {
+    if (username !== MASTER) return false;
     const resolve = n => (n === 'me' ? MASTER : n === 'you' ? bot.username : n);
     const from = resolve(tpMatch[1]);
     const to   = resolve(tpMatch[2]);
@@ -167,17 +190,34 @@ async function handle(bot, lower, raw) {
   }
 
   if (IS_TP_TO_ME(lower)) {
-    const player = bot.players[MASTER]?.entity;
-    if (!player) { bot.chat("I can't see you."); return true; }
-    const p = player.position;
-    bot.chat(`/tp ${bot.username} ${Math.floor(p.x)} ${Math.floor(p.y)} ${Math.floor(p.z)}`);
+    if (username !== MASTER) return false;
+    // Player-to-player /tp works cross-dimension natively in Minecraft.
+    bot.chat(`/tp ${bot.username} ${MASTER}`);
     return true;
   }
 
   if (IS_TP_ME_TO_YOU(lower)) {
-    const p = bot.entity.position;
-    bot.chat(`/tp ${MASTER} ${Math.floor(p.x)} ${Math.floor(p.y)} ${Math.floor(p.z)}`);
+    if (username !== MASTER) return false;
+    const p   = bot.entity.position;
+    const dim = bot.game.dimension; // e.g. "minecraft:overworld"
+    bot.chat(`/execute in ${dim} run tp ${MASTER} ${Math.floor(p.x)} ${Math.floor(p.y)} ${Math.floor(p.z)}`);
     return true;
+  }
+
+  // "tp <label>" shortcut — looks up checkpoint by name, no keyword needed
+  {
+    const m = /^(?:tp|teleport|teleporta)\s+(.+)$/.exec(lower);
+    if (m) {
+      const label = m[1].trim().replace(/^['"]|['"]$/g, '');
+      const srv   = getActiveServerName();
+      const dim   = bot.game?.dimension ?? 'unknown';
+      const row   = stmtCpGet.get(srv, dim, label);
+      if (row) {
+        bot.chat(`/tp ${bot.username} ${row.x} ${row.y} ${row.z}`);
+        return true;
+      }
+      // not a checkpoint — fall through to Letta
+    }
   }
 
   if (IS_STOP_EXPLORE(lower)) {
@@ -245,6 +285,138 @@ async function handle(bot, lower, raw) {
       }
       return true;
     }
+  }
+
+  // ── Location index ────────────────────────────────────────────────────────
+  // "remember this as X" / "lembra isso como X" / "save this place as X"
+  {
+    const m = lower.match(/(?:remember|lembra|save|mark)\s+(?:this|isso|this place|esse lugar)?\s*(?:as|como)\s+(.+)/);
+    if (m) {
+      const label = m[1].trim().replace(/['"]/g, '');
+      const p = bot.entity.position;
+      stmtSaveLoc.run(Math.round(p.x), Math.round(p.y), Math.round(p.z), label, null);
+      bot.chat(`Saved location "${label}" at ${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)}.`);
+      return true;
+    }
+  }
+
+  // "where is X?" / "where's X?"
+  {
+    const m = lower.match(/where(?:'s| is)\s+(.+?)(?:\?|$)/);
+    if (m) {
+      const label = m[1].trim();
+      const row = stmtGetLoc.get(label);
+      if (!row) { bot.chat(`I don't know where "${label}" is.`); }
+      else {
+        const dist = Math.round(Math.hypot(row.x - bot.entity.position.x, row.z - bot.entity.position.z));
+        bot.chat(`"${row.label}" is at ${row.x}, ${row.y}, ${row.z} (~${dist}m away).`);
+      }
+      return true;
+    }
+  }
+
+  // "go to X" / "take me to X" / "navigate to X"
+  {
+    const m = lower.match(/(?:go to|take me to|navigate to|vai para|vai at[eé]|leva(?:-me)? at[eé])\s+(.+)/);
+    if (m) {
+      const label = m[1].trim();
+      const row = stmtGetLoc.get(label);
+      if (!row) { bot.chat(`I don't know where "${label}" is.`); return true; }
+      setBehavior(bot, 'idle', MASTER);
+      const movements = createMovements(bot);
+      bot.pathfinder.setMovements(movements);
+      bot.pathfinder.setGoal(new GoalNear(row.x, row.y, row.z, 2));
+      bot.chat(`Heading to "${label}" (${row.x}, ${row.y}, ${row.z}).`);
+      return true;
+    }
+  }
+
+  // "list locations" / "what places do you know?"
+  if (/(?:list (?:locations|places|saved)|what places|where have you been|lugares que conheces)/.test(lower)) {
+    const rows = stmtListLocs.all();
+    if (!rows.length) { bot.chat('No saved locations yet.'); }
+    else { bot.chat('Known: ' + rows.map(r => `${r.label}(${r.x},${r.z})`).join(', ')); }
+    return true;
+  }
+
+  // "nearest saved location"
+  if (/nearest (?:saved )?(?:location|place|spot)/.test(lower)) {
+    const p = bot.entity.position;
+    const row = stmtNearLoc.get(p.x, p.x, p.z, p.z);
+    if (!row) { bot.chat('No saved locations.'); }
+    else {
+      const dist = Math.round(Math.sqrt(row.dist2));
+      bot.chat(`Nearest: "${row.label}" at ${row.x}, ${row.y}, ${row.z} (~${dist}m away).`);
+    }
+    return true;
+  }
+
+  // ── Checkpoints ──────────────────────────────────────────────────────────────
+
+  {
+    const m = CP_SET.exec(lower);
+    if (m) {
+      const label = m[1].trim().replace(/^['"]|['"]$/g, '');
+      const p     = bot.entity.position;
+      const srv   = getActiveServerName();
+      const dim   = bot.game?.dimension ?? 'unknown';
+      stmtCpSave.run(srv, dim, label, Math.round(p.x), Math.round(p.y), Math.round(p.z));
+      bot.chat(`Checkpoint "${label}" saved at ${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)}.`);
+      return true;
+    }
+  }
+
+  // "tp me to checkpoint X" — teleport player to checkpoint
+  {
+    const m = CP_TMP.exec(lower);
+    if (m) {
+      if (username !== MASTER) return false;
+      const label = m[1].trim().replace(/^['"]|['"]$/g, '');
+      const srv   = getActiveServerName();
+      const dim   = bot.game?.dimension ?? 'unknown';
+      const row   = stmtCpGet.get(srv, dim, label);
+      if (!row) { bot.chat(`No checkpoint "${label}" on ${srv}/${dim}.`); return true; }
+      bot.chat(`/tp ${MASTER} ${row.x} ${row.y} ${row.z}`);
+      return true;
+    }
+  }
+
+  // "tp checkpoint X" — teleport Nilo to checkpoint
+  {
+    const m = CP_TP.exec(lower);
+    if (m) {
+      const label = m[1].trim().replace(/^['"]|['"]$/g, '');
+      const srv   = getActiveServerName();
+      const dim   = bot.game?.dimension ?? 'unknown';
+      const row   = stmtCpGet.get(srv, dim, label);
+      if (!row) { bot.chat(`No checkpoint "${label}" on ${srv}/${dim}.`); return true; }
+      bot.chat(`/tp ${bot.username} ${row.x} ${row.y} ${row.z}`);
+      return true;
+    }
+  }
+
+  // "delete checkpoint X"
+  {
+    const m = CP_DEL.exec(lower);
+    if (m) {
+      if (username !== MASTER) return false;
+      const label = m[1].trim().replace(/^['"]|['"]$/g, '');
+      const srv   = getActiveServerName();
+      const dim   = bot.game?.dimension ?? 'unknown';
+      const info  = stmtCpDel.run(srv, dim, label);
+      bot.chat(info.changes > 0 ? `Checkpoint "${label}" deleted.` : `No checkpoint "${label}" on ${srv}/${dim}.`);
+      return true;
+    }
+  }
+
+  // "list checkpoints"
+  if (CP_LIST.test(lower)) {
+    const srv  = getActiveServerName();
+    const dim  = bot.game?.dimension ?? 'unknown';
+    const rows = stmtCpList.all(srv, dim);
+    if (!rows.length) { bot.chat(`No checkpoints on ${srv}/${dim}.`); }
+    else { bot.chat(`[${srv}/${dim.split(':')[1]}] ` + rows.map(r => `${r.label}(${r.x},${r.y},${r.z})`).join(', ')); }
+    return true;
   }
 
   return false;

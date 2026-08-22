@@ -1,31 +1,100 @@
-// letta.js — Letta API client and response parsing
+// letta.js — Letta API client (with local Ollama fallback) and response parsing
 
-const { LETTA_URL } = require('./config');
+const { LETTA_URL, OLLAMA_URL, OLLAMA_MODEL, NILO_FALLBACK_PERSONA } = require('./config');
 
-// ── Letta API ─────────────────────────────────────────────────────────────────
+const LETTA_TIMEOUT_MS = 30_000;
 
-async function queryLetta(userMessage) {
+// ── Response cleanup ──────────────────────────────────────────────────────────
+// Shared by both the Letta and Ollama paths. Strips emoji and filters out
+// artifacts that occasionally leak into assistant text (memory-compaction
+// dumps, internal narration, bare action words confused for a reply).
+
+function cleanText(raw) {
+  let text = raw.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
+  // Strip a leading "A: " label — leftover habit from the old Q:/A: example format
+  text = text.replace(/^A:\s*/i, '').trim();
+  // Drop JSON blobs (memory compaction dumps, system_alert, etc.)
+  if (/^\s*[{\[]/.test(text) && !/^\[ACTION:\s*\w+\]\s*$/i.test(text)) throw new Error('Model returned structured data, suppressing');
+  // Drop raw tool-call blocks (e.g. <tool_call>{"name": "memory_insert", ...})
+  if (/^\s*<tool_call>/i.test(text)) throw new Error('Model returned a tool call, suppressing');
+  // Drop internal memory narration (first-person and third-person patterns)
+  if (/^(got it[.,]|i('ve| have) (stored|saved|noted|updated|kept)|i'll keep this|memory (updated|saved)|noted[.,]|the (primary |main |current )?(goal|objective|task|priority)|the user('s| has| is)|scanning |no immediate threats|proceed with caution|high.level goal)/i.test(text)) throw new Error('Model returned memory narration, suppressing');
+  // Drop responses that are only an action word (model confused action with reply)
+  if (/^(follow|stay|sit|stop|come|closer|unstuck|dance|fish|wander|attack|guard|passive|explore|wave|spin|jump|sneak|stand|guard)\s*\.?\s*$/i.test(text)) throw new Error('Model returned bare action word, suppressing');
+  return text;
+}
+
+// ── Letta API (potent model — Apollo's GPU-backed Qwen2.5-7B-Instruct-AWQ) ──────
+
+async function fetchLettaRaw(userMessage) {
   const { default: fetch } = await import('node-fetch');
 
-  const res = await fetch(LETTA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: [{ role: 'user', content: userMessage }],
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LETTA_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(LETTA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
 
   for (const msg of data.messages || []) {
     if (msg.message_type === 'assistant_message' && msg.content) {
-      // Strip emojis and trim
-      return msg.content.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
+      return Array.isArray(msg.content)
+        ? (msg.content.find(c => c.type === 'text')?.text ?? '')
+        : String(msg.content);
     }
   }
 
   throw new Error('No assistant_message response from Letta');
+}
+
+// ── Ollama fallback (weaker local model, used when Letta is unreachable) ───────
+
+async function fetchOllamaRaw(userMessage) {
+  const { default: fetch } = await import('node-fetch');
+
+  const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      stream: false,
+      messages: [
+        { role: 'system', content: NILO_FALLBACK_PERSONA },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
+  const data = await res.json();
+  return data?.message?.content ?? '';
+}
+
+// ── Combined entry point ────────────────────────────────────────────────────────
+// Tries the potent Letta model first; if it's unreachable (Apollo down, network
+// blip, etc.) transparently falls back to a local Ollama model.
+
+async function queryLetta(userMessage) {
+  let raw;
+  try {
+    raw = await fetchLettaRaw(userMessage);
+  } catch (err) {
+    console.warn(`[LETTA] ${err.message} — falling back to local Ollama (${OLLAMA_MODEL})`);
+    raw = await fetchOllamaRaw(userMessage);
+  }
+  return cleanText(raw);
 }
 
 // ── Action parsing ────────────────────────────────────────────────────────────

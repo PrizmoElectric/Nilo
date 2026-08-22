@@ -8,7 +8,7 @@ const skillEngine = require('./skill-engine');
 const { startTunnel } = require('./skills/tunnel');
 const { collectGrave, startFishing, buildSimpleHouse, startDance, sleepInBed } = require('./activities');
 const { ensureTools } = require('./skills/crafting');
-const { goals: { GoalNear } } = require('mineflayer-pathfinder');
+const { goals: { GoalNear } } = require('./pathfinder-compat');
 
 // ── Action dispatch ───────────────────────────────────────────────────────────
 
@@ -34,8 +34,8 @@ function dispatchAction(bot, action, username) {
       setBehavior(bot, 'idle', username);
       break;
     case 'sit':
-      state.isSneaking = true;
       setBehavior(bot, 'sit', username);
+      state.isSneaking = true;
       bot.setControlState('sneak', true);
       break;
     case 'come': {

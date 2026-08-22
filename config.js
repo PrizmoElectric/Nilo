@@ -5,7 +5,22 @@ const path = require('path');
 
 const BOT_USERNAME = 'NILO';
 const MASTER       = process.env.MASTER || 'PrizmoElectric';
-const LETTA_URL    = process.env.LETTA_URL || 'http://localhost:8283/v1/agents/agent-9fb13e9e-f9ce-4802-b90d-ffb5eceb5434/messages';
+const LETTA_URL    = process.env.LETTA_URL || 'http://localhost:8283/v1/agents/agent-75ce7db5-acff-4c48-a59f-94034e00b6aa/messages';
+
+// Local Ollama fallback — used when LETTA_URL (the GPU-backed potent model on
+// Apollo) is unreachable. NOX's GPU can't run the big model, so this points at
+// a smaller model already pulled locally.
+const OLLAMA_URL   = process.env.OLLAMA_URL   || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'dolphin-llama3';
+const NILO_FALLBACK_PERSONA = process.env.NILO_FALLBACK_PERSONA ||
+  'You are NILO, a friendly Minecraft companion bot for PrizmoElectric. ' +
+  'Keep replies short, casual, and in plain text - no markdown, no JSON, no emoji. ' +
+  "You're running on a smaller local model right now, so keep it simple.";
+
+// Self-hosted SearXNG instance (odysseus stack) — used by websearch.js for
+// Nilo's toggleable "internet" access. JSON output enabled in its settings.yml.
+const SEARXNG_URL = process.env.SEARXNG_URL || 'http://localhost:8080';
+
 const CONFIG_PATH  = '/home/prizmo/nilo/config.json';
 const SERVERS_PATH = path.join(__dirname, 'servers.json');
 
@@ -92,7 +107,7 @@ function saveConfig(cfg) {
 }
 
 module.exports = {
-  BOT_USERNAME, MASTER, LETTA_URL, CONFIG_PATH, SERVERS_PATH,
+  BOT_USERNAME, MASTER, LETTA_URL, OLLAMA_URL, OLLAMA_MODEL, NILO_FALLBACK_PERSONA, SEARXNG_URL, CONFIG_PATH, SERVERS_PATH,
   DISCORD_TOKEN, DISCORD_CHANNEL_ID, DISCORD_MASTER_ID,
   MATURE_CROPS, DEATH_VERBS, ADVANCEMENT_RE, JOIN_RE, LEAVE_RE,
   getServerConfig, setActiveServer, getActiveServerName, loadServers, addServer,

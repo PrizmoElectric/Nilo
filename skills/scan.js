@@ -16,6 +16,10 @@ async function runScan(bot, raw) {
   bot.chat(`Scanning ${radius}-block radius...`);
 
   const pos     = bot.entity.position.floored();
+  if (isNaN(pos.x) || isNaN(pos.z)) {
+    bot.chat('Position not ready yet — try again in a moment.');
+    return null;
+  }
   const counts = {};   // name → count
   const AIR    = new Set(['air', 'cave_air', 'void_air']);
 
@@ -92,4 +96,37 @@ async function runScan(bot, raw) {
   return entry;
 }
 
-module.exports = { runScan };
+// Returns up to maxCount Vec3 positions of blocks matching keyword (substring match on name).
+// Uses the same loaded-world scan as runScan — only finds blocks in loaded chunks.
+function findBlockPositions(bot, keyword, radius = 64, maxCount = 10) {
+  const kw  = keyword.toLowerCase();
+  const pos = bot.entity.position.floored();
+  const AIR = new Set(['air', 'cave_air', 'void_air']);
+  const hits = [];
+
+  for (let x = pos.x - radius; x <= pos.x + radius && hits.length < maxCount; x++) {
+    for (let y = Math.max(-64, pos.y - radius); y <= Math.min(320, pos.y + radius) && hits.length < maxCount; y++) {
+      for (let z = pos.z - radius; z <= pos.z + radius && hits.length < maxCount; z++) {
+        const p3 = new Vec3(x, y, z);
+        const sid = bot.world.getBlockStateId(p3);
+        if (!sid) continue;
+        const b    = bot.blockAt(p3);
+        let name;
+        if (b && b.name && b.name !== 'unknown' && b.name !== '') {
+          if (AIR.has(b.name)) continue;
+          name = b.name;
+        } else {
+          name = getModdedBlockName(sid) || '';
+        }
+        if (name && name.toLowerCase().includes(kw)) hits.push(p3);
+      }
+    }
+  }
+
+  hits.sort((a, b) => {
+    return a.distanceTo(pos) - b.distanceTo(pos);
+  });
+  return hits;
+}
+
+module.exports = { runScan, findBlockPositions };

@@ -3,6 +3,447 @@ NILO — CHANGELOG
 Newest first. Dates are approximate session dates.
 
 ────────────────────────────────────────────────────────
+2026-08-05 (session 17)
+────────────────────────────────────────────────────────
+Objective shift: audit already-claimed-working mechanics instead of adding
+new ones — several turned out broken. Nothing in this entry has been
+live-tested yet; see CHECKLIST.txt's "SESSION 17" section for the test list.
+
+Totem (combat.js, nilo.js):
+- Root cause of "Nilo can't use totems": combatTick's totem-equip check only
+  ran inside attack/assist mode (the only two callers of combatTick), so any
+  death outside active combat (ambush while mining/following/idle) never had
+  a chance to equip one. Even inside combat, startAttack/startAssist checked
+  health <= RETREAT_HP (4) and returned BEFORE calling combatTick, so the
+  totem check (gated at TOTEM_HP=6) was skipped exactly when health had
+  already crashed past it. And being reactive at all was wrong regardless —
+  vanilla only honors a totem already in the offhand before the fatal hit.
+- Replaced with mineflayer-totem-auto (npm, zero deps, MIT) — proactive,
+  physicsTick-based equip, matches how real AutoTotem implementations work.
+  Read its full source before installing (no network calls, nothing
+  suspicious). Wired into nilo.js alongside the other plugins; dead reactive
+  block removed from combat.js along with the now-unused TOTEM_HP constant.
+- Known tradeoff: combat.js's shield-into-offhand logic will keep losing to
+  the totem plugin whenever Nilo carries a totem (both want the offhand).
+  Left as-is — totem (death insurance) outranks shield (damage mitigation).
+
+Possession mode (remote-control.js, nilo.js):
+- remote-control.js was already correctly built — polls Solsai's
+  /bot-control-state (written by prizmo-system's BotSneakScreen at 10Hz) and
+  drives setControlState/look/swingArm/activateItem directly. Bug: its
+  exported stopRemoteControl() was never called anywhere. createBot() runs
+  again on every reconnect (bot.on('end', ...) -> setTimeout(createBot,
+  10000)), producing a new bot object, but remote-control.js's module-level
+  pollInterval guard (if (pollInterval) return;) stayed set from the OLD
+  bot's still-running interval, so startRemoteControl(newBot) silently
+  no-op'd after the first reconnect — the stale interval kept calling
+  control methods on the dead bot forever, no error logged.
+- Fix: stopRemoteControl(bot) now called from nilo.js's bot.on('end', ...).
+  Also wrapped releaseAll()'s bot.clearControlStates()/setControlState()
+  calls in try/catch, since bot may already be disconnected when called from
+  the 'end' handler.
+- Verified the rest of the chain (prizmo-system's InteractionMixin ->
+  BotSneakScreen -> Solsai's /bot-control + /bot-control-state) is wired
+  correctly end-to-end (entity name matches BOT_USERNAME, endpoint paths and
+  the `player` key line up) — the reconnect bug was very likely the whole
+  story for "possession doesn't work".
+
+Pathfinder engine swap (movement.js, pathfinder-compat.js [new], + 26 other
+files) — the biggest change this session:
+- mineflayer-pathfinder (installed v2.4.5, last published upstream
+  2023-09-04) replaced with @miner-org/mineflayer-baritone (actively
+  maintained, ISC license) — richer feature set out of the box: parkour,
+  scaffolding/block-placing, better swimming, all enabled/available via its
+  config vs. mineflayer-pathfinder's more limited defaults.
+- Real Baritone (cabaletta, the Java one) was investigated first and ruled
+  out: it's a Fabric/Forge client mod that runs inside a real Minecraft
+  client process — architecturally impossible to run inside Nilo, a headless
+  protocol-level Node.js bot. Confirmed via Baritone's own open GitHub issue
+  requesting headless support (unresolved).
+- 27 files referenced mineflayer-pathfinder directly (150+ call sites:
+  skills/*, combat.js, movement.js, clones.js, mirror.js, monitor.js, every
+  commands/*.js file, nilo.js). Rather than rewrite every call site's
+  control flow, built pathfinder-compat.js: a shim reproducing the OLD
+  mineflayer-pathfinder API (bot.pathfinder.setGoal/goto/setMovements/.goal/
+  .movements/.stop/.thinkingTimeout, Movements, GoalNear/GoalBlock/GoalFollow
+  with their old constructor signatures) backed by the new engine
+  underneath. Handles the concurrency mismatch (new engine's goto() is
+  single-shot/promise-based and THROWS if called again before stop() or
+  completion, vs. the old fire-and-forget "call setGoal again anytime to
+  redirect" pattern used everywhere in this codebase) via internal
+  stop()-then-goto() sequencing, plus goal-diffing (goalsEqual()) so an
+  unchanged goal reissued every combat/follow tick doesn't restart
+  pathfinding from scratch. Also translates the old Movements object's
+  ID-keyed openable/blocksToAvoid Sets into the new engine's name-keyed
+  config.interactableBlocks/blocksToStayAway live, via a Proxy-backed Set
+  whose .add() resolves the block name and pushes it immediately — needed
+  because some call sites (nilo.js, movement.js's door-opener) mutate
+  movements.openable AFTER setMovements() already ran (runtime-learned
+  modded doors).
+- All 27 files' import lines swapped from 'mineflayer-pathfinder' to the
+  shim; call sites elsewhere required zero changes since the shim preserves
+  the exact old surface. mineflayer-pathfinder removed from package.json.
+- Confirmed the new engine reads block solidity via the same bot.blockAt()/
+  block.boundingBox/block.shapes path as the old one (traced getBlock() in
+  the library's own movement/index.js down to this.bot.blockAt(pos)) — so
+  registry-patch.js's modded-stateId data (nilo-assets/*.json caches) should
+  carry over unchanged; the swap doesn't fix or worsen the separately-
+  flagged "stateIds don't work properly yet" issue, which is likely a
+  registry-patch.js bug, not pathfinder-specific.
+- Caught during actual module loading (not just static review):
+  GoalFollowEntity, despite existing in the library's src/goal.js, is NOT in
+  its public package export (only GoalNear/GoalExact/GoalXZ/GoalRegion/etc.
+  are). Its own followEntity() helper works around this by just
+  reconstructing a plain GoalNear at the entity's current position and
+  reissuing goto() every 500ms — exactly the same "reconstruct + reissue on
+  an interval" pattern Nilo's own follow loops already use. Fixed GoalFollow
+  in the shim to extend the exported GoalNear instead.
+- Caught during a full wiring re-check (not the initial conversion pass):
+  mineflayer-collectblock (bot.collectBlock.collect()) is incompatible with
+  the new engine — it builds goal objects from its own internally-bundled
+  copy of the OLD mineflayer-pathfinder and calls
+  bot.pathfinder.movements.safeToBreak(block), a method the shim never
+  implemented; would have thrown immediately the moment it actually ran.
+  It's genuinely called in 3 places: activities.js's runFarm() crop
+  harvesting, skills/collect_nearest_log.js, and advertised as an available
+  API in skill-engine.js's LLM skill-generation prompt (meaning future
+  auto-generated skills could have hit it too). Added collectBlock(bot,
+  block) to movement.js (same goto+dig pattern "mine this" already uses
+  successfully) and swapped all 3 call sites + the LLM prompt text/injected
+  scope to use it instead. Removed the collectblock plugin load from
+  nilo.js and uninstalled mineflayer-collectblock.
+- mineflayer-tool (still in use, for bot.tool.equipForBlock) has the same
+  class of old-pathfinder dependency in its own Inventory.js, on a
+  craft/fetch-missing-tool code path — Nilo's plain equipForBlock(block)
+  calls don't appear to trigger it, so left as-is. Flagged in CHECKLIST.txt
+  as an unconfirmed risk rather than fixed preemptively.
+
+Spectator server (nilo.js):
+- Added mineflayer-spectator (npm, zero deps, MIT) — a real Minecraft
+  server (node-minecraft-protocol) you join with an actual game client for
+  camera-follow spectating (/spectatortp), distinct from and independent of
+  possession mode. Port 25566, password 'nilo123', spectatorsCanChat: true.
+  Must start before login completes per the library's own requirement, so
+  it's wired in right after the plugin loads, before installRegistryPatch.
+- Proactively applied the same fix class as the possession-mode bug: added
+  a module-level spectatorServer handle that gets .close()'d before starting
+  a fresh one on every createBot() call, so a reconnect doesn't leave the
+  port permanently bound by a dead listener (EADDRINUSE on the next start).
+
+Command prefix rename + behavior change (nilo.js, commands/index.js,
+discord-bridge.js, MANUAL.txt):
+- Renamed !/!nilo -> #/#nilo throughout (in-game chat, Discord's !server/
+  !behavior/!skill/!goal/!trust/!untrust/!trusted/!status/!help, MANUAL.txt).
+- The actual fix, not just cosmetic: commands/index.js's handleNaturalCommand
+  used to run "quickHandlers" (freyr, shield, clone, clones, internet,
+  navigation, activities — i.e. follow/sit/come here/mine this/etc.)
+  UNCONDITIONALLY regardless of the prefixed flag, only gating the
+  "destructive/slow/rare" prefixHandlers behind prefixed:true. This meant
+  most commands fired on bare natural language with no prefix at all —
+  the actual source of accidental activation during casual conversation.
+  Changed to `if (!prefixed) return false;` up front — now nothing matches
+  without the caller explicitly passing prefixed:true (i.e. the message
+  actually started with #).
+- Updated every caller: nilo.js's in-game chat handler now only calls
+  handleNaturalCommand with prefixed:true when message.startsWith('#'), and
+  the disconnect shortcut ("leave"/"disconnect") is now gated behind the
+  prefix too. discord-bridge.js's #nilo-optional fallthrough (which ran
+  command-matching on every message regardless of prefix, same bug class)
+  now only does so when the message actually started with #nilo.
+  Deliberately exempted: the local CLI (`nilo` interactive terminal) and
+  remote-control.js's prizmo-system terminal command channel both now pass
+  prefixed:true unconditionally — treated as dedicated command consoles
+  (shell/UI-gated, not casual chat), not subject to the accidental-
+  activation concern the prefix rule targets.
+- While fixing discord-bridge.js's fallthrough, almost hardcoded MASTER as
+  the username passed into handleNaturalCommand (the original call passed
+  none at all). Caught before landing: that would have granted MASTER-level
+  command permissions to any authorized-but-non-master Discord user typing
+  a prefixed command. Left as undefined, preserving original narrower
+  behavior — only the prefix gating changed, not authorization.
+- MANUAL.txt updated: header now states the global # requirement explicitly
+  (previously most commands were documented prefix-free since they used to
+  work that way), #nilo admin section renamed, NOTAS section updated.
+
+Password review (not a code change): NILO_PASSWORD (easyauth.js, pre-
+existing) and the new SPECTATOR_PASSWORD both fall back to a hardcoded
+'nilo123' literal in committed source when unset in .env — currently unset,
+so that literal is what's actually running for both. This repo has a GitHub
+remote (PrizmoEletric/nilo), and .env (correctly gitignored) doesn't
+currently define either var, so both features share one weak, source-
+visible password. User reviewed and chose to leave as-is (home LAN only,
+not port-forwarded) — revisit if network exposure ever changes.
+
+────────────────────────────────────────────────────────
+2026-06-07 (session 16)
+────────────────────────────────────────────────────────
+Clone army polish — formation/anti-stacking, real skins, Solsai-based
+inventory management (instant Freyr Sword + new bread distribution), HUD
+integration, and "clone N" army resizing.
+
+Formation + personal-space (clones.js):
+- Replaced GoalFollow(nilo, FOLLOW_DIST) — which made every clone converge
+  on the same point and visually stack "inside each other" — with a stable
+  per-index ring formation: each clone gets a fixed angular slot
+  (bot._formationAngle, computed once at spawn from its army index) on a
+  FORMATION_RADIUS=6 ring around Nilo, naturally spreading out and rotating
+  as Nilo moves.
+- Added mutual avoidance: each tick, a clone scans the shared `clones` Map
+  (O(n), n<=20) for its nearest neighbor; if closer than PERSONAL_SPACE=1.6
+  blocks, it steps 2.5 blocks directly away (1.5s cooldown). No shared
+  mutable state — every clone decides independently.
+- bot._mode ('attack'/'follow'/'idle') is now tracked through every branch
+  of startCloneBehavior's tick (combat, pickup, personal-space, formation,
+  rescue-teleport) — see HUD integration below for why.
+
+Real skins via FabricTailor local-file upload (clones.js):
+- "/skin set <url>" never worked for clones: FabricTailor delegates URL
+  fetching to mineskin.org's external servers, which can't reach the
+  private LAN IP 192.168.1.100 — the command ran with no error but never
+  changed anything. FIX: discovered (via decompiling fabrictailor-2.1.2.jar,
+  class SkinFetcher.setSkinFromFile) and verified live that
+  "/skin set upload <classic|slim> <server-side file path>" reads the file
+  directly off the MC server's disk and uploads its bytes — no network
+  fetch needed. Argument order is <variant> <path>, NOT <path> <variant>
+  (the latter throws "Incorrect argument for command"). Each clone now runs
+  "/skin set upload slim /data/SerialDesignation_N-V2.png" (Nilo's real
+  skin PNG, volume-mounted into the server container) on spawn — verified
+  texture hash matches Nilo's.
+
+Solsai-based inventory management — replaced toss+/tp+pickup (clones.js):
+- Added solsaiGet(path) helper hitting Solsai's HTTP API at 127.0.0.1:8080
+  (same model as context-mod-client.js's httpGet).
+- distributeFreyrSwords() refactored from "toss the sword + /tp the
+  recipient onto the drop point + rely on vanilla pickup-on-contact" to a
+  single instant /item-transfer call — server-authoritative,
+  inventory-to-inventory, nothing can be lost/stolen by mobs en route.
+- NEW distributeFood(): if Nilo is carrying more than FOOD_KEEP_BACK=10
+  bread, tops up any clone whose bread has fallen to <=FOOD_MIN_COUNT=10
+  back up toward FOOD_TOPUP_TO=16 via the same /item-transfer mechanism —
+  so the army doesn't starve during long follows/fights. One clone topped
+  up per poll (DISTRIBUTE_POLL_MS=15s), same gentle cadence as the sword
+  distribution.
+- Removed the now-unused resolveItemName import (items.js) — Solsai's
+  /bot-inventory already returns full registry IDs (e.g.
+  "soulsweapons:freyr_sword"), so no client-side name resolution needed.
+
+HUD integration — clones now visible to prizmo-system (api.js, clones.js):
+- Generalized api.js's pushModeToSolsai(mode) -> pushModeToSolsai(player,
+  mode) and exported it. Solsai's /bot-state and /bot-inventory endpoints
+  were already keyed by player name (and prizmo-system's SolsaiClient
+  already loops getBotNames() polling all of them) — the only missing piece
+  was that nothing ever pushed a MODE for clones, so they all showed up in
+  the HUD as the 'idle' default with wrong ESP color.
+- New 2s poll in clones.js pushes each clone's live bot._mode to Solsai's
+  /bot-mode?player=<clone>&mode=<mode> — mode-colored ESP boxes and the
+  inventory-peek panel now work for the whole army, not just NILO.
+
+"clone N" army resizing (clones.js, commands/clones.js):
+- Extracted disbandClones(bots) (retract Freyr Swords, wait, quit) out of
+  despawnAllClones as shared teardown logic.
+- New despawnClones(target): disbands the highest-indexed clones down to
+  `target`, keeping the low-numbered "core" roster (e.g. 6 clones -> "clone
+  3" disbands clones 4-6). commands/clones.js's "clone N" handler now
+  branches on count vs clones.size: spawns more, reports "already have N",
+  or disbands the surplus — replacing the old "already have N clone(s) out"
+  no-op when N was lower than the current count.
+- (User/linter follow-up, same session: extended to accept N=0 as a full
+  army stand-down without deactivating clone mode — see commands/clones.js
+  and the updated MANUAL.txt "clone N (N de 0 a 20)" entry.)
+
+MANUAL.txt: EXÉRCITO DE CLONES section rewritten — documents the formation/
+anti-stacking behavior, real skins, instant Solsai-based Freyr Sword + bread
+distribution, and HUD visibility for the clone army.
+
+────────────────────────────────────────────────────────
+2026-06-07 (session 15)
+────────────────────────────────────────────────────────
+Freyr Sword reliability pass — fixed two "command silently falls through to
+Letta and fabricates a response" bugs, added silent auto-recall on logoff,
+stray-sword detection, and "clone 0".
+
+Diagnosed (not yet fixed — both pre-existing, found via log archaeology):
+- "activate freyr" (22:05:58) never reached freyr.js — the clone-army commit
+  (87d6243) added commands/freyr.js + freyr.js but never registered freyrCmd
+  in commands/index.js's handler list. handleNaturalCommand returned false,
+  the message fell through to Letta, which invented "Freyr activation
+  sequence initiated. [ACTION: follow]" — nothing was actually summoned.
+  (NOTE: a later, still-uncommitted edit to commands/index.js — restructuring
+  into quickHandlers/prefixHandlers — already fixes this; it's live since the
+  01:01 service restart, just needs `git add`/commit so it survives a reset.)
+- "freir return" (00:27:56, typo missing the 'y') hit the same fallthrough:
+  commands/freyr.js gates everything on `lower.includes('freyr')`, so the
+  misspelling bypassed the real returnFreyr() entirely. Letta fabricated
+  "Looks like Freyr returned..." — the sword (UUID 3e076bfc..., bound at
+  00:20:59) was never actually recalled and was likely still out in the world.
+  Not yet fixed — would need typo tolerance (e.g. match "freir"/"frey" too,
+  or fuzzy-match against "freyr") in the gate + regexes.
+
+Silent auto-recall before disconnect (freyr.js, nilo.js):
+- New freyr.retractBeforeDisconnect(bot): if findFreyrEntity() confirms the
+  sword is out, sends the CHANNEL_RETURN packet, resets freyrStationary,
+  waits 250ms for the socket to flush. No bot.chat — pure housekeeping.
+- Wired into every controlled logoff path: chat "leave"/"disconnect", "!nilo
+  quit", and SIGTERM/SIGINT (nilo stop/restart, Ctrl+C — refactored into a
+  shared shutdown(reason) helper that recalls the sword before stopping
+  Discord and exiting).
+- Why this matters: s.freyrUUID is never cleared once bound ("persists in
+  server-side player NBT" per the existing comment), so leaving the sword
+  summoned across a logout strands its entity in the world under a UUID
+  Nilo will keep matching on the next login — exactly the "Nilo thinks his
+  sword is out but it's not really his anymore" stuck state the user
+  hypothesized about (confirmed plausible by code review: findFreyrEntity
+  matches by UUID identity only, with no re-validation of ownership/control).
+- Limitation: can't help with ungraceful disconnects (server kick, crash) —
+  no window to send a final packet once the socket is already gone.
+
+Stray Freyr Sword detection (freyr.js, monitor.js):
+- New freyr.findStraySwords(bot, knownUUIDs): nearby freyr_sword_entity that
+  are neither Nilo's own confirmed sword nor bound to any UUID you pass in
+  (intended use: the bound UUIDs of currently-online clones).
+- startAutonomousBehaviors (monitor.js) now scans every ~30s, cross-
+  referencing against clones.values().map(freyr.getFreyrUUID) — flags swords
+  most likely abandoned by a clone that died or disconnected before
+  retractBeforeDisconnect existed (or crashed past it). Logs each new UUID
+  once (tag [FREYR] → logs/<date>/freyr.log) with position; forgets ones that
+  leave render range so they can be re-flagged if they reappear. No chat —
+  monitoring only, same "don't make it explicit" instruction as the recall.
+
+"clone 0" now valid (commands/clones.js):
+- Count clamp changed from Math.max(1, ...) to Math.max(0, ...).
+- "clone 0" with an active army → despawnClones(0) disbands everyone
+  ("Disbanded N clone(s) — army stood down.") WITHOUT deactivating clone
+  mode — "clone N" immediately after re-spawns without needing "cloneon"
+  again. With no clones out, just replies "No clones out." instead of
+  spawning 1 (the old Math.max(1,...) silently floored "clone 0" → spawn 1).
+- Updated the cloneon confirmation message and MANUAL.txt to describe the
+  0-20 range and the disband-without-deactivating behavior.
+
+────────────────────────────────────────────────────────
+2026-06-06 (session 14)
+────────────────────────────────────────────────────────
+Bug fixes — wander leash, grave detection, behavior persistence.
+
+Wander leash (monitor.js, commands/navigation.js, nilo.js):
+- All three wander sources now check: MASTER online AND within 30 blocks.
+  If either fails, the wander tick skips (Nilo holds position).
+  Sources: autonomous exploration (monitor.js), "wander" command interval
+  (navigation.js), wander restoration on spawn (nilo.js).
+- Autonomous exploration step capped ±10 blocks (was ±20).
+- Root cause of the original death: wander accumulates unboundedly from
+  current position each tick — no anchor to home or player.
+
+Grave detection fix (activities.js — isGraveBlock):
+- Catch-all for unnamed/unknown solid blocks now gated behind graveBlockId === null.
+  Previously always active, causing Nilo to treat gravel (unresolved stateId,
+  empty name) as his grave and walk toward it. graveBlockId is resolved from
+  'yigd:grave' registry on every collectGrave call — when successful (normal),
+  the catch-all never fires.
+
+Behavior persistence fix (persist.js, nilo.js):
+- persist.js: saveBehavior() piggybacks state.exploringEnabled into the JSON.
+  loadBehavior() returns it. spawn handler restores it before anything else.
+- Fixed: exploringEnabled always defaulted to true on reboot (state.js hardcode),
+  ignoring "stop exploring" from the previous session.
+- Fixed: skipAutoFollow now also covers saved mode 'idle' (from "stay"/"stop").
+  Previously only covered sit/defensive/passive, so "stay" → reboot → Nilo
+  would auto-follow as soon as MASTER appeared.
+- Fixed: wander restoration in spawn lacked the MASTER proximity guard.
+
+────────────────────────────────────────────────────────
+2026-06-06 (session 13)
+────────────────────────────────────────────────────────
+Prizmo-system HUD + Nilo bot features. Full checklist pass.
+
+Solsai renamed (1.8.0):
+- Mod rebranded from "Zote Context Mod" to "Solsai" — new jar name solsai-1.8.0.jar,
+  mod ID changed from zote_context_mod to solsai, authors updated, env=server.
+- Added /bot-mode?player=X&mode=Y endpoint — receives mode push from Nilo.
+- Added /bot-state?player=X endpoint — returns health+food (from ServerPlayerEntity)
+  + behaviorMode (from /bot-mode push). Client mod no longer needs port 3008.
+
+Prizmo-system (0.1.14):
+- API-offline fix: SolsaiClient.poll() now hits port 8080 /bot-state instead of
+  port 3008. No firewall changes needed.
+- Mode-colored ESP boxes: idle/wander=green, follow=cyan, guard/attack=orange, unknown=red.
+- Status panel: world-to-screen projection places panel beside bot (left or right).
+  Connector line (dot + vert + horiz) links bot projected position to panel.
+- Range indicator: "~Xm" in top-right of status panel.
+- Inventory peek: top 3 hotbar items shown inside the panel.
+- ZOTE support: SolsaiClient loops getBotNames() — polls /bot-state and /bot-inventory
+  for all bots, not just NILO.
+- Right-click → BotInventoryScreen; shift+click → chat. Panel hint updated.
+
+Nilo bot:
+- navigation.js: location index commands — "remember this as X", "where is X?",
+  "go to X", "list locations", "nearest saved location". Uses locations table in nilo.db.
+- nilo.js: diggingCompleted hook records stateId→blockName (ground_truth confidence)
+  to nilo.db. Only overwrites entries with confidence below ground_truth.
+- api.js: pushModeToSolsai() — every 2s sends current behaviorMode to Solsai /bot-mode.
+
+────────────────────────────────────────────────────────
+2026-06-01 (session 12)
+────────────────────────────────────────────────────────
+Infrastructure repair — Letta + vLLM stack broken after upgrade.
+
+PostgreSQL setup (Letta 0.16.8 dropped SQLite):
+- Installed postgresql, initialized cluster, enabled service.
+- Created user 'letta' (pw: "n") and database 'letta'.
+- Installed pgvector (AUR), created vector extension in DB.
+- Schema created via ORM; added messages_sequence_id_seq + granted perms.
+- ~/.letta/pg_uri: postgresql+pg8000://letta:n@localhost:5432/letta
+- letta.service: added LETTA_PG_URI env var so Letta detects POSTGRES mode.
+- letta.service created (port 8283, enabled at boot).
+- nilo.service: After=letta.service, Wants=letta.service.
+
+vLLM fixes:
+- /home/prizmo/.local/bin/vllm wrapper was injecting --tool-call-parser mistral
+  and --chat-template /home/prizmo/mistral.jinja. LFM2 uses its own tool tokens
+  and vLLM 0.22.0 has a dedicated lfm2_tool_parser for it.
+- Fixed wrapper: --tool-call-parser lfm2, no chat-template override.
+- vllm.service max-model-len: 2048 → 4096 (Letta system prompt needs ~1700 tokens).
+
+New Letta agent:
+- agent-75ce7db5-acff-4c48-a59f-94034e00b6aa (model: cyankiwi/LFM2-8B-A1B-AWQ-4bit)
+- Registered vLLM as OpenAI-compatible provider "vllm-local" (http://localhost:8000/v1).
+- context_window: 4096, max_tokens: 300, temperature: 0.8
+- config.js LETTA_URL updated.
+
+Discord bridge fixes (discord-bridge.js):
+- Discord reply support: message.reference resolved, prepended as
+  [Replying to <who>: "<text>"] so Nilo knows what message is being replied to.
+- Removed [Respond in: lang] from Letta context — model was echoing it verbatim.
+- Removed offline/server status from context — Nilo no longer fixates on it.
+- System prompt: server connection state is not a big deal, not worth mentioning.
+
+────────────────────────────────────────────────────────
+2026-05-29 (session 11)
+────────────────────────────────────────────────────────
+Mirror system — Node.js side (mirror.js, commands/mirror.js):
+- watch mode: freeze + look at master + log events only.
+- learn mode: GoalFollow dist=2 + poll /mirror-events + replay + record.
+- Recording: mirrors/<timestamp>.json, events with relative t (ms).
+- saveMirrorRecording() on bot.on('end') saves file on any disconnect.
+- commands/mirror placed first in handler chain — prevents IS_STAY(/\bstop\b/)
+  in navigation from swallowing "mirror stop" / "stop mirroring".
+- Commands: "mirror watch", "mirror me", "mirror stop", "mirror list", "mirror status"
+
+Mirror system — Fabric mod v1.3.0 (zote-context-mod):
+- MirrorCaptureMixin.java: @Mixin(ServerPlayNetworkHandler) captures 7 C2S
+  packet types for PrizmoElectric: move, action, use_block, use_entity,
+  use_item, command (sneak/sprint), custom_packet (mod abilities).
+- ContextMod.java: ConcurrentLinkedQueue mirrorBuffer + GET /mirror-events.
+- Deployed: zote-context-mod-1.3.0.jar. Server restart required.
+- use_entity records player position instead of entity ID (no Yarn accessor).
+- onClientCommand + onCustomPayload use require=0 (non-fatal if absent).
+
+CPU fix (mobile-stream.js):
+- SwiftShader was rendering at 60fps continuously → Chrome GPU at 1189% CPU.
+- Fix: inject rAF throttler into headless Chrome page after warmup.
+  Active rate: 333ms (3fps). Idle rate: 1000ms when no phone clients.
+- Result: GPU process stabilised at ~143% CPU (−88% from peak).
+
+────────────────────────────────────────────────────────
 2026-05-28–29 (session 8)
 ────────────────────────────────────────────────────────
 Auto-mapper reconnect fix (registry-patch.js):

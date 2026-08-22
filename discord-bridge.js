@@ -3,7 +3,7 @@
 // Discord → Minecraft:
 //   Messages in the bridge channel from MASTER's Discord account are forwarded
 //   to handleNaturalCommand (same pipeline as in-game chat). Other authorized
-//   users get basic command access (!follow, !stay, !status, etc.).
+//   users get basic command access (#follow, #stay, #status, etc.).
 //
 // Minecraft → Discord:
 //   Nilo's chat responses, player chat, deaths, respawns, and status events
@@ -59,25 +59,86 @@ function mcLine(username, message) {
 
 // ── Status command ────────────────────────────────────────────────────────────
 
+// Formats a millisecond duration as "Xh Ym" / "Xm Ys" / "Xs".
+function formatDuration(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
 function buildStatusEmbed(bot) {
-  if (!bot) return 'Nilo is offline.';
+  const sc       = getServerConfig();
+  const target   = `${sc.host}:${sc.port}`;
+  const srvName  = getActiveServerName();
+  const now      = Date.now();
+
+  if (!bot) {
+    const lines = [
+      '```',
+      `NILO STATUS — Minecraft: OFFLINE`,
+      `Target     : ${srvName} (${target})`,
+    ];
+    const err = state.lastConnectionError;
+    if (err) lines.push(`Last error : ${err.code || err.message} (${formatDuration(now - err.time)} ago)`);
+    const downSince = state.lastDisconnectTime || state.bootTime;
+    lines.push(`Down for   : ${formatDuration(now - downSince)}`);
+    if (state.reconnectAttempts > 0) lines.push(`Reconnect  : attempt #${state.reconnectAttempts}, retrying every 10s`);
+    lines.push(`Letta chat : still works here — only the in-game connection is down.`);
+    lines.push('```');
+    return lines.join('\n');
+  }
+
   const pos    = bot.entity?.position;
   const posStr = pos ? `${Math.floor(pos.x)}, ${Math.floor(pos.y)}, ${Math.floor(pos.z)}` : 'unknown';
   const health = bot.health != null ? `${Math.round(bot.health)}/20` : 'unknown';
   const food   = bot.food   != null ? `${bot.food}/20` : 'unknown';
   const mode   = state.behaviorMode || 'idle';
   const skills = (() => { try { return require('./skill-engine').skillCount(); } catch(_) { return '?'; } })();
-  const auto   = state.autonomousSkillsEnabled ? 'ON' : 'OFF';
+  const auto     = state.autonomousSkillsEnabled ? 'ON' : 'OFF';
+  const explore  = state.exploringEnabled ? 'ON' : 'OFF';
+  const internet = state.internetEnabled ? 'ON' : 'OFF';
+  const upFor    = state.connectedSince ? formatDuration(now - state.connectedSince) : 'unknown';
 
-  return [
+  // Freyr Sword
+  let freyr = 'none';
+  try {
+    const { findFreyrEntity, hasFreyrItem, isStationary } = require('./freyr');
+    if (findFreyrEntity(bot)) freyr = isStationary(bot) ? 'summoned, holding position' : 'summoned, following';
+    else if (hasFreyrItem(bot)) freyr = 'in inventory';
+  } catch (_) {}
+
+  // MASTER presence/distance
+  const masterPlayer = bot.players[MASTER];
+  let masterLine = 'offline';
+  if (masterPlayer?.entity && pos) masterLine = `online, ${Math.round(pos.distanceTo(masterPlayer.entity.position))} blocks away`;
+  else if (masterPlayer) masterLine = 'online, not in render distance';
+
+  const lines = [
     '```',
-    `NILO STATUS`,
-    `Position : ${posStr}`,
-    `Health   : ${health}    Food: ${food}`,
-    `Mode     : ${mode}`,
-    `Skills   : ${skills} learned    Autonomous: ${auto}`,
-    '```',
-  ].join('\n');
+    `NILO STATUS — Minecraft: ONLINE`,
+    `Server     : ${srvName} (${target})`,
+    `Connected  : ${upFor}`,
+    `Position   : ${posStr}`,
+    `Health     : ${health}    Food: ${food}`,
+    `Mode       : ${mode}`,
+    `Exploring  : ${explore}    Autonomous: ${auto}    Internet: ${internet}`,
+    `Skills     : ${skills} learned`,
+    `Freyr Sword: ${freyr}`,
+    `Master     : ${MASTER} — ${masterLine}`,
+  ];
+
+  // Clone army (only shown when relevant)
+  if (state.cloneModeActive) {
+    const count = (() => { try { return require('./clones').clones.size; } catch(_) { return 0; } })();
+    lines.push(`Clones     : ${count} active (Freyr: ${state.freyrCloneToggle ? 'on' : 'off'})`);
+  }
+
+  lines.push('```');
+  return lines.join('\n');
 }
 
 // ── Discord → Minecraft command handler ──────────────────────────────────────
@@ -108,14 +169,14 @@ async function _handleDiscordMessage(message) {
     } catch (_) {}
   }
 
-  // !status — anyone in the channel can check
-  if (lower === '!status' || lower === '!nilo status') {
+  // #status — anyone in the channel can check
+  if (lower === '#status' || lower === '#nilo status') {
     await toDiscord(buildStatusEmbed(bot));
     return;
   }
 
-  // !skills — list learned skills
-  if (lower === '!skills' || lower === '!nilo skills') {
+  // #skills — list learned skills
+  if (lower === '#skills' || lower === '#nilo skills') {
     const list = require('./skill-engine').listSkills();
     await toDiscord(`**Skills:** ${list}`);
     return;
@@ -124,59 +185,59 @@ async function _handleDiscordMessage(message) {
   // MASTER-only direct commands (no Letta, instant response)
   if (isMaster) {
     // ── Help ─────────────────────────────────────────────────────────────────
-    if (lower === '!help') {
+    if (lower === '#help') {
       await toDiscord(
         '**NILO Master commands**\n' +
-        '`!autonomous on/off` — toggle autonomous behavior\n' +
-        '`!skill list` — list skills\n' +
-        '`!skill learn <task>` — learn a new skill\n' +
-        '`!skill run <name>` — run a skill\n' +
-        '`!skill forget <name>` — delete a skill\n' +
-        '`!goal <task>` — queue a goal\n' +
-        '`!trust <player>` / `!untrust <player>` — manage trust\n' +
-        '`!trusted` — list trusted players\n' +
-        '`!behavior <mode>` / `!behavior clear` — set behavior\n' +
-        '`!server list` — show server profiles\n' +
-        '`!server add <name> <host> [port]` — add profile and connect immediately\n' +
-        '`!server switch <name>` — switch Minecraft server\n' +
-        '`!server save <name>` — save current server as a profile\n' +
-        '`!status` / `!skills` — status & skill list\n' +
+        '`#autonomous on/off` — toggle autonomous behavior\n' +
+        '`#skill list` — list skills\n' +
+        '`#skill learn <task>` — learn a new skill\n' +
+        '`#skill run <name>` — run a skill\n' +
+        '`#skill forget <name>` — delete a skill\n' +
+        '`#goal <task>` — queue a goal\n' +
+        '`#trust <player>` / `#untrust <player>` — manage trust\n' +
+        '`#trusted` — list trusted players\n' +
+        '`#behavior <mode>` / `#behavior clear` — set behavior\n' +
+        '`#server list` — show server profiles\n' +
+        '`#server add <name> <host> [port]` — add profile and connect immediately\n' +
+        '`#server switch <name>` — switch Minecraft server\n' +
+        '`#server save <name>` — save current server as a profile\n' +
+        '`#status` / `#skills` — status & skill list\n' +
         '_Or just talk naturally — Nilo understands you._'
       );
       return;
     }
 
     // ── Autonomous ──────────────────────────────────────────────────────────
-    if (/^!autonomous\s+(on|off)$/i.test(lower)) {
+    if (/^#autonomous\s+(on|off)$/i.test(lower)) {
       state.autonomousSkillsEnabled = /on/i.test(lower);
       await toDiscord(`Autonomous mode: **${state.autonomousSkillsEnabled ? 'ON' : 'OFF'}**`);
       return;
     }
 
     // ── Skills ───────────────────────────────────────────────────────────────
-    if (/^!skill\s+list$/i.test(lower)) {
+    if (/^#skill\s+list$/i.test(lower)) {
       const list = require('./skill-engine').listSkills();
       await toDiscord(`**Skills:** ${list}`);
       return;
     }
-    if (/^!skill\s+forget\s+\S+/i.test(lower)) {
-      const name = lower.replace(/^!skill\s+forget\s+/, '').trim();
+    if (/^#skill\s+forget\s+\S+/i.test(lower)) {
+      const name = lower.replace(/^#skill\s+forget\s+/, '').trim();
       const ok = require('./skill-engine').deleteSkill(name);
       await toDiscord(ok ? `Skill **${name}** forgotten.` : `No skill named **${name}**.`);
       return;
     }
-    if (/^!skill\s+learn\s+.+/i.test(lower)) {
+    if (/^#skill\s+learn\s+.+/i.test(lower)) {
       if (!bot) { await toDiscord('Not in Minecraft — cannot learn skills right now.'); return; }
-      const task = content.replace(/^!skill\s+learn\s+/i, '').trim();
+      const task = content.replace(/^#skill\s+learn\s+/i, '').trim();
       await toDiscord(`Learning: *${task}*...`);
       require('./skill-engine').learnSkill(bot, task)
         .then(() => toDiscord(`Skill learned: **${task}**`))
         .catch(e => toDiscord(`Failed to learn: ${e.message}`));
       return;
     }
-    if (/^!skill\s+run\s+\S+/i.test(lower)) {
+    if (/^#skill\s+run\s+\S+/i.test(lower)) {
       if (!bot) { await toDiscord('Not in Minecraft — cannot run skills right now.'); return; }
-      const name = content.replace(/^!skill\s+run\s+/i, '').trim();
+      const name = content.replace(/^#skill\s+run\s+/i, '').trim();
       await toDiscord(`Running skill: **${name}**...`);
       require('./skill-engine').runSkill(bot, name)
         .then(r => toDiscord(r.success ? `Skill **${name}** done.` : `Skill **${name}** failed: ${r.error}`))
@@ -185,34 +246,34 @@ async function _handleDiscordMessage(message) {
     }
 
     // ── Goal queue ───────────────────────────────────────────────────────────
-    if (/^!goal\s+.+/i.test(lower)) {
-      const task = content.replace(/^!goal\s+/i, '').trim();
+    if (/^#goal\s+.+/i.test(lower)) {
+      const task = content.replace(/^#goal\s+/i, '').trim();
       require('./skill-engine').queueGoal(task);
       await toDiscord(`Goal queued: *${task}*`);
       return;
     }
 
     // ── Trust ────────────────────────────────────────────────────────────────
-    if (/^!trust\s+\S+/i.test(lower)) {
-      const name = content.replace(/^!trust\s+/i, '').trim();
+    if (/^#trust\s+\S+/i.test(lower)) {
+      const name = content.replace(/^#trust\s+/i, '').trim();
       require('./trust').trustPlayer(name);
       await toDiscord(`**${name}** is now trusted.`);
       return;
     }
-    if (/^!untrust\s+\S+/i.test(lower)) {
-      const name = content.replace(/^!untrust\s+/i, '').trim();
+    if (/^#untrust\s+\S+/i.test(lower)) {
+      const name = content.replace(/^#untrust\s+/i, '').trim();
       require('./trust').untrustPlayer(name);
       await toDiscord(`**${name}** is no longer trusted.`);
       return;
     }
-    if (/^!trusted$/i.test(lower)) {
+    if (/^#trusted$/i.test(lower)) {
       const list = require('./trust').listTrusted();
       await toDiscord(`**Trusted players:** ${list.length ? list.join(', ') : 'none'}`);
       return;
     }
 
     // ── Server switching ─────────────────────────────────────────────────────
-    if (/^!server\s+list$/i.test(lower)) {
+    if (/^#server\s+list$/i.test(lower)) {
       const servers = loadServers();
       const names   = Object.keys(servers);
       if (!names.length) { await toDiscord('No server profiles in servers.json.'); return; }
@@ -224,8 +285,8 @@ async function _handleDiscordMessage(message) {
       await toDiscord('**Server profiles:**\n' + lines.join('\n'));
       return;
     }
-    if (/^!server\s+switch\s+\S+/i.test(lower)) {
-      const name = lower.replace(/^!server\s+switch\s+/, '').trim();
+    if (/^#server\s+switch\s+\S+/i.test(lower)) {
+      const name = lower.replace(/^#server\s+switch\s+/, '').trim();
       try {
         setActiveServer(name);
         const sc = getServerConfig();
@@ -237,21 +298,21 @@ async function _handleDiscordMessage(message) {
       }
       return;
     }
-    if (/^!server\s+current$/i.test(lower)) {
+    if (/^#server\s+current$/i.test(lower)) {
       const sc = getServerConfig();
       await toDiscord(`Current server: **${getActiveServerName()}** (\`${sc.host}:${sc.port}\` v${sc.version})`);
       return;
     }
-    if (/^!server\s+save\s+\S+/i.test(lower)) {
-      const name = lower.replace(/^!server\s+save\s+/, '').trim();
+    if (/^#server\s+save\s+\S+/i.test(lower)) {
+      const name = lower.replace(/^#server\s+save\s+/, '').trim();
       const sc   = getServerConfig();
       addServer(name, { host: sc.host, port: sc.port, version: sc.version, auth: sc.auth, description: '' });
       await toDiscord(`Saved current server (\`${sc.host}:${sc.port}\`) as **${name}**.`);
       return;
     }
-    if (/^!server\s+add\s+\S+\s+\S+/i.test(lower)) {
-      const m = content.match(/^!server\s+add\s+(\S+)\s+(\S+)(?:\s+(\d+))?/i);
-      if (!m) { await toDiscord('Usage: `!server add <name> <host> [port]`'); return; }
+    if (/^#server\s+add\s+\S+\s+\S+/i.test(lower)) {
+      const m = content.match(/^#server\s+add\s+(\S+)\s+(\S+)(?:\s+(\d+))?/i);
+      if (!m) { await toDiscord('Usage: `#server add <name> <host> [port]`'); return; }
       const [, name, host, portStr] = m;
       const port = portStr ? parseInt(portStr) : 25565;
       const sc   = getServerConfig();
@@ -268,31 +329,45 @@ async function _handleDiscordMessage(message) {
     }
 
     // ── Behavior ─────────────────────────────────────────────────────────────
-    if (/^!behavior\s+clear$/i.test(lower)) {
+    if (/^#behavior\s+clear$/i.test(lower)) {
       if (!bot) { await toDiscord('Not in Minecraft.'); return; }
       require('./behavior').clearBehavior(bot);
       await toDiscord('Behavior cleared.');
       return;
     }
-    if (/^!behavior\s+\S+/i.test(lower)) {
+    if (/^#behavior\s+\S+/i.test(lower)) {
       if (!bot) { await toDiscord('Not in Minecraft.'); return; }
-      const mode = lower.replace(/^!behavior\s+/, '').trim();
+      const mode = lower.replace(/^#behavior\s+/, '').trim();
       require('./behavior').setBehavior(bot, mode, MASTER);
       await toDiscord(`Behavior set to **${mode}**.`);
       return;
     }
 
-    // ── Prefix !nilo is optional from Discord — fall through to NL pipeline ──
-    const cleaned = content.replace(/^!nilo\s*/i, '').trim();
+    // A prefix is REQUIRED to reach the command pipeline — matches the
+    // in-game rule that no command ever fires without one. Without it, this
+    // falls straight through to Letta/search below as plain chat. Two forms
+    // accepted: "#nilo <text>" (Discord's own long-standing convention) or a
+    // bare "#" (matches in-game chat exactly — "#step 2 forward" etc.).
+    let hadPrefix, cleaned;
+    if (/^#nilo\b/i.test(content)) {
+      hadPrefix = true;
+      cleaned = content.replace(/^#nilo\s*/i, '').trim();
+    } else if (/^#/.test(content)) {
+      hadPrefix = true;
+      cleaned = content.slice(1).trim();
+    } else {
+      hadPrefix = false;
+      cleaned = content.trim();
+    }
     if (!cleaned) return;
 
     console.log(`[DISCORD${bot ? '→MC' : ' OFFLINE'}] ${message.author.username}: ${cleaned}`);
 
-    // Try natural command pipeline only when in-game
-    if (bot) {
+    // Try natural command pipeline only when in-game and prefixed
+    if (bot && hadPrefix) {
       const { handleNaturalCommand } = require('./commands');
       let acted = false;
-      try { acted = await handleNaturalCommand(bot, cleaned.toLowerCase(), cleaned); }
+      try { acted = await handleNaturalCommand(bot, cleaned.toLowerCase(), cleaned, undefined, { prefixed: true }); }
       catch (err) { console.error('[DISCORD] handleNaturalCommand error:', err.message); }
 
       if (acted) {
@@ -301,13 +376,54 @@ async function _handleDiscordMessage(message) {
       }
     }
 
+    // Internet on/off + search work even when Nilo is offline in-game —
+    // web access doesn't need a Minecraft connection.
+    if (!bot) {
+      const { IS_INTERNET_ON, IS_INTERNET_OFF, SEARCH_RE, runSearch } = require('./commands/internet');
+      const lowerCleaned = cleaned.toLowerCase();
+
+      if (IS_INTERNET_ON(lowerCleaned)) {
+        state.internetEnabled = true;
+        await toDiscord("Internet on — I'll search the web on my own when it's useful.");
+        return;
+      }
+      if (IS_INTERNET_OFF(lowerCleaned)) {
+        state.internetEnabled = false;
+        await toDiscord('Internet off.');
+        return;
+      }
+      const m = cleaned.match(SEARCH_RE);
+      if (m) {
+        const query = m[1].trim();
+        if (!state.internetEnabled) {
+          await toDiscord('Internet access is off — say "internet on" first.');
+          return;
+        }
+        if (query) {
+          await toDiscord(`Searching: ${query}...`);
+          try {
+            const result = await runSearch(query);
+            await toDiscord(result?.text ? `**NILO:** ${result.text}` : "Nothing useful came back.");
+          } catch (err) {
+            console.error('[DISCORD] search error:', err.message);
+            await toDiscord("Couldn't reach the search engine.");
+          }
+          state.lastInteractionTime = Date.now();
+          return;
+        }
+      }
+    }
+
     // Letta — works whether online or offline
     try {
       const { detectLanguage }          = require('./lang');
       const { queryLetta, parseAction } = require('./letta');
       const { sessionHintFor }          = require('./monitor');
+      const { getSearchContext }        = require('./websearch');
 
       const lang = detectLanguage(cleaned);
+      const searchCtx = await getSearchContext(cleaned);
+      const searchPrefix = searchCtx ? `${searchCtx}\n\n` : '';
       let ctx;
 
       if (bot) {
@@ -316,7 +432,7 @@ async function _handleDiscordMessage(message) {
         const inv  = getInventorySummary(bot);
         const held = bot.heldItem ? bot.heldItem.name : 'nothing';
         const actionHint = `[Available actions — if the message implies one, append [ACTION: name]: follow, stay, sit, stop, come, closer, unstuck, dance, fish, stop_fish, bow, shoot_target, tunnel, build_house, sleep, wander, attack, defensive, passive, explore, stop_explore, collect_grave, wave, spin, jump, ensure_tools]`;
-        ctx = `${sessionHintFor(MASTER)}${replyContext}${MASTER} says (via Discord): ${cleaned}\n[inventory: ${inv}, holding: ${held}]\n${actionHint}`;
+        ctx = `${sessionHintFor(MASTER)}${searchPrefix}${replyContext}${MASTER} says (via Discord): ${cleaned}\n[inventory: ${inv}, holding: ${held}]\n${actionHint}`;
 
         const raw = await queryLetta(ctx);
         const { text, action } = parseAction(raw);
@@ -324,7 +440,7 @@ async function _handleDiscordMessage(message) {
         if (text)   bot.chat(text);  // monkey-patch handles Discord, skips in-game (discordContext=true)
         if (action) dispatchAction(bot, action, MASTER);
       } else {
-        ctx = `${sessionHintFor(MASTER)}${replyContext}${MASTER} says (via Discord): ${cleaned}`;
+        ctx = `${sessionHintFor(MASTER)}${searchPrefix}${replyContext}${MASTER} says (via Discord): ${cleaned}`;
 
         const raw = await queryLetta(ctx);
         const { text } = parseAction(raw);
@@ -339,11 +455,11 @@ async function _handleDiscordMessage(message) {
   }
 
   // Non-master users: only basic read-only commands
-  if (lower === '!help') {
+  if (lower === '#help') {
     await toDiscord(
       '**NILO Bridge commands**\n' +
-      '`!status` — show current bot status\n' +
-      '`!skills` — list learned skills\n' +
+      '`#status` — show current bot status\n' +
+      '`#skills` — list learned skills\n' +
       '_Full control requires MASTER authorization._'
     );
   }
@@ -371,7 +487,7 @@ function startDiscord() {
     console.log(`[DISCORD] Logged in as ${discordClient.user.tag}`);
     try {
       bridgeChannel = await discordClient.channels.fetch(DISCORD_CHANNEL_ID);
-      await toDiscord(`NILO is awake. Type \`!status\` to check in.`);
+      await toDiscord(`NILO is awake. Type \`#status\` to check in.`);
     } catch (err) {
       console.error('[DISCORD] Could not fetch bridge channel:', err.message);
     }
@@ -396,7 +512,7 @@ function startDiscord() {
 
 function attachBot(bot) {
   _botRef = bot;
-  toDiscord('**NILO joined Minecraft.** Type `!status` to check in.');
+  toDiscord('**NILO joined Minecraft.** Type `#status` to check in.');
 
   // Wrap bot.chat so responses go to the right place:
   //   discordContext=false → in-game only, then mirror to Discord
@@ -404,7 +520,9 @@ function attachBot(bot) {
   const origChat = bot.chat.bind(bot);
   bot.chat = function(text) {
     if (!state.discordContext) origChat(text);
-    if (/^\/(login|register)\b/i.test(text)) return;
+    // Any slash-command (skin, tp, execute, login, etc.) is a server
+    // instruction, not something Nilo "said" — never leak it to Discord.
+    if (/^\//.test(text)) return;
     toDiscord(`**NILO:** ${text}`);
   };
 
