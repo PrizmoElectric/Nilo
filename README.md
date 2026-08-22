@@ -1,6 +1,6 @@
 # NILO
 
-An AI Minecraft bot powered by a [Letta](https://letta.ai) memory agent. NILO lives in your world, understands natural language, remembers what you teach it, and acts autonomously.
+An AI Minecraft bot powered by a [Letta](https://letta.ai) memory agent. NILO lives in your world, understands natural language, remembers what you teach it, and can act autonomously.
 
 ## Features
 
