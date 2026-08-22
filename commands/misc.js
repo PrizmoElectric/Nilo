@@ -1,7 +1,7 @@
 const state = require('../state');
 const { runCommand } = require('../actions');
 const { getPlayerGazeTarget } = require('../gaze');
-const { getServerConfig, setActiveServer, getActiveServerName, loadServers, BOT_USERNAME } = require('../config');
+const { getServerConfig, setActiveServer, getActiveServerName, loadServers, addServer, BOT_USERNAME } = require('../config');
 const { setManualOverride, getResolved, getDiscovered, getModdedEntityName } = require('../registry-patch');
 const { isHostileMob } = require('../combat');
 const { LETTA_URL } = require('../config');
@@ -9,6 +9,16 @@ const db = require('../db');
 
 const stmtGetEntity = db.prepare('SELECT is_hostile FROM entities WHERE name = ?');
 const stmtCountResolved = db.prepare('SELECT COUNT(*) as n FROM state_ids');
+
+// Parses a "connect to <token>" token that isn't a saved server name into a raw host[:port].
+function parseHostPortToken(token) {
+  const m = /^([^:\s]+)(?::(\d+))?$/.exec(token);
+  if (!m) return null;
+  const host = m[1];
+  const port = m[2] ? parseInt(m[2], 10) : 25565;
+  if (!host || port < 1 || port > 65535) return null;
+  return { host, port };
+}
 
 async function handle(bot, lower, raw) {
   // "nilo_nilo" — no-op test command
@@ -231,9 +241,20 @@ async function handle(bot, lower, raw) {
   if (switchMatch) {
     const name = switchMatch[1].toLowerCase();
     try {
+      if (!loadServers()[name]) {
+        // Not a saved profile — treat it as a raw host[:port] and register it on the fly.
+        const parsed = parseHostPortToken(name);
+        if (!parsed) {
+          bot.chat(`"${name}" isn't a known server or a valid address (host[:port]).`);
+          return true;
+        }
+        const sc = getServerConfig();
+        addServer(name, { host: parsed.host, port: parsed.port, version: sc.version, auth: sc.auth, description: '' });
+      }
       setActiveServer(name);
       const sc = getServerConfig();
-      bot.chat(`Switching to ${name} (${sc.host}:${sc.port}) — reconnecting in ~10s...`);
+      bot.chat(`Switching to ${name} (${sc.host}:${sc.port}) — reconnecting...`);
+      state.pendingServerSwitch = { targetName: name, attempt: 0, replyTarget: state.discordContext ? 'discord' : 'cli' };
       setTimeout(() => bot.quit('server switch'), 500);
     } catch (e) {
       bot.chat(e.message);

@@ -49,7 +49,7 @@ const { sessionHintFor } = require('./monitor');
 const { handleNaturalCommand } = require('./commands');
 const { dispatchAction, runCommand } = require('./actions');
 const { getSearchContext } = require('./websearch');
-const { startDiscord, attachBot, stopDiscord } = require('./discord-bridge');
+const { startDiscord, attachBot, stopDiscord, toDiscord } = require('./discord-bridge');
 const { saveMirrorRecording } = require('./mirror');
 const { startRemoteControl, stopRemoteControl } = require('./remote-control');
 const { startApi } = require('./api');
@@ -130,6 +130,7 @@ function createBot() {
     state.connectedSince = Date.now();
     state.lastConnectionError = null;
     state.reconnectAttempts = 0;
+    state.pendingServerSwitch = null;
     hudApi.setBot(bot);
 
     // Forward Nilo's chat to any open CLI sessions.
@@ -802,6 +803,19 @@ function createBot() {
       state.intentionalDisconnect = false;
       return;
     }
+    if (state.pendingServerSwitch) {
+      const sw = state.pendingServerSwitch;
+      sw.attempt++;
+      if (sw.attempt <= 2) {
+        console.log(`[SERVER] Connecting to ${sw.targetName} (attempt ${sw.attempt}/2)...`);
+        setTimeout(createBot, sw.attempt === 1 ? 0 : 2000);
+      } else {
+        console.log(`[SERVER] Switch to ${sw.targetName} failed after 2 attempts.`);
+        deliverSwitchFailure(sw);
+        state.pendingServerSwitch = null;
+      }
+      return;
+    }
     state.reconnectAttempts++;
     console.log('[NILO] Disconnected. Reconnecting in 10s...');
     setTimeout(createBot, 10000);
@@ -827,6 +841,21 @@ if (serverArgIdx !== -1) {
 
 watchLog();
 startDiscord();   // Discord up immediately — works even before Minecraft connects
+
+// Delivers a message when the bot itself never connected (e.g. a failed server
+// switch), so bot.chat — only patched to reach the CLI after login — isn't available.
+function broadcastToCli(text) {
+  const payload = JSON.stringify({ type: 'nilo', text: String(text) });
+  for (const ws of state.cliClients || []) {
+    if (ws && ws.readyState === 1) ws.send(payload);
+  }
+}
+
+function deliverSwitchFailure(sw) {
+  const msg = `Hmm, something went wrong connecting to ${sw.targetName} — could you double-check the address and send it again?`;
+  if (sw.replyTarget === 'discord') toDiscord(msg);
+  else broadcastToCli(msg);
+}
 
 // ── Local CLI session (WebSocket) ─────────────────────────────────────────────
 // Clients connect on ws://localhost:4000.

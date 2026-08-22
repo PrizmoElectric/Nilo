@@ -290,9 +290,11 @@ async function _handleDiscordMessage(message) {
       try {
         setActiveServer(name);
         const sc = getServerConfig();
-        await toDiscord(`Switching to **${name}** (\`${sc.host}:${sc.port}\`) — reconnecting in ~10s...`);
-        if (bot) setTimeout(() => bot.quit('server switch'), 500);
-        else await toDiscord('(Nilo is offline — will connect to the new server on next start.)');
+        await toDiscord(`Switching to **${name}** (\`${sc.host}:${sc.port}\`) — reconnecting...`);
+        if (bot) {
+          state.pendingServerSwitch = { targetName: name, attempt: 0, replyTarget: 'discord' };
+          setTimeout(() => bot.quit('server switch'), 500);
+        } else await toDiscord('(Nilo is offline — will connect to the new server on next start.)');
       } catch (e) {
         await toDiscord(`Error: ${e.message}`);
       }
@@ -320,8 +322,10 @@ async function _handleDiscordMessage(message) {
       try {
         setActiveServer(name);
         await toDiscord(`Added **${name}** (\`${host}:${port}\`) and connecting...`);
-        if (bot) setTimeout(() => bot.quit('server switch'), 500);
-        else await toDiscord('(Nilo is offline — will connect to **' + name + '** on next start.)');
+        if (bot) {
+          state.pendingServerSwitch = { targetName: name, attempt: 0, replyTarget: 'discord' };
+          setTimeout(() => bot.quit('server switch'), 500);
+        } else await toDiscord('(Nilo is offline — will connect to **' + name + '** on next start.)');
       } catch (e) {
         await toDiscord(`Error: ${e.message}`);
       }

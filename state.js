@@ -37,6 +37,7 @@ const state = {
   lastDisconnectTime:    null,       // Date.now() of the last bot.on('end')
   lastConnectionError:   null,       // { message, code, time } from the last bot.on('error')
   reconnectAttempts:     0,          // consecutive failed reconnects, resets to 0 on login
+  pendingServerSwitch:   null,       // { targetName, attempt, replyTarget } while an explicit switch/connect is in flight
 };
 
 module.exports = state;
