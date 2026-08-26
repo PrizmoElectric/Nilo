@@ -10,3 +10,7 @@ scans/
 
 .aider*
 venv-aider/
+
+# Decompiled third-party mod research debris (not project source)
+/net/
+/META-INF/

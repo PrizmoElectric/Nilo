@@ -1,7 +1,7 @@
 const state = require('../state');
 const { runCommand } = require('../actions');
 const { getPlayerGazeTarget } = require('../gaze');
-const { getServerConfig, setActiveServer, getActiveServerName, loadServers, addServer, BOT_USERNAME } = require('../config');
+const { getServerConfig, getSolsaiBase, setActiveServer, getActiveServerName, loadServers, addServer, BOT_USERNAME } = require('../config');
 const { setManualOverride, getResolved, getDiscovered, getModdedEntityName } = require('../registry-patch');
 const { isHostileMob } = require('../combat');
 const { LETTA_URL } = require('../config');
@@ -20,6 +20,28 @@ function parseHostPortToken(token) {
   return { host, port };
 }
 
+// "help" / "nilo_help" — condensed category list of everything Nilo responds to.
+// Full detail lives in MANUAL.txt (too long for chat) — this is a quick
+// reference. All of these require the # prefix in normal chat.
+// Exported so nilo.js's CLI WebSocket handler can answer #help without a live
+// bot connection — help needs no game state, so it shouldn't need one.
+const IS_HELP_CMD = /^(?:nilo_help|help)\b/;
+function getHelpLines() {
+  return [
+    'Commands need # in chat (e.g. #follow). Full list: MANUAL.txt',
+    'Navigation: follow, come here, closer, stay, sit, wander, explore, unstuck, tp me, look at me',
+    'Combat: attack, guard, defensive, passive, use bow, shoot that, assist, protect me',
+    'Freyr Sword: summon freyr, freyr return, freyr hold, freyr follow, freyr status',
+    'Clones: clone N, cloneon/cloneoff, freyr on/off',
+    'Mirror: mirror watch, mirror learn, mirror stop',
+    'Activities: tunnel, fish, build house, sleep, dance, farm, write sign, mine this, collect grave',
+    'Teaching: this is <mod:name>, this / what is this, blockname',
+    'Admin (#nilo ...): quit, say, setfarm, setchest, learn, do, skills, forget, queue, autonomous on/off, trust/untrust/trusted',
+    'Server: list servers, current server, switch server <name>, save server <name>',
+    'Misc: stats, status, sync soul, restart, say <text>, nilo_nilo, help',
+  ];
+}
+
 async function handle(bot, lower, raw) {
   // "nilo_nilo" — no-op test command
   if (/^nilo_nilo\b/.test(lower)) {
@@ -27,24 +49,10 @@ async function handle(bot, lower, raw) {
     return true;
   }
 
-  // "nilo_help" — condensed category list of everything Nilo responds to.
-  // Full detail lives in MANUAL.txt (too long for chat) — this is a quick
-  // reference. All of these require the # prefix in normal chat.
-  if (/^nilo_help\b/.test(lower)) {
-    const lines = [
-      'Commands need # in chat (e.g. #follow). Full list: MANUAL.txt',
-      'Navigation: follow, come here, closer, stay, sit, wander, explore, unstuck, tp me, look at me',
-      'Combat: attack, guard, defensive, passive, use bow, shoot that',
-      'Freyr Sword: summon freyr, freyr return, freyr hold, freyr follow, freyr status',
-      'Clones: clone N, cloneon/cloneoff, freyr on/off',
-      'Mirror: mirror watch, mirror learn, mirror stop',
-      'Activities: tunnel, fish, build house, sleep, dance, farm, write sign, mine this, collect grave',
-      'Teaching: this is <mod:name>, this / what is this, blockname',
-      'Admin (#nilo ...): quit, say, setfarm, setchest, learn, do, skills, forget, queue, autonomous on/off, trust/untrust/trusted',
-      'Server: list servers, current server, switch server <name>, save server <name>',
-      'Misc: stats, status, sync soul, restart, say <text>, nilo_nilo, nilo_help',
-    ];
-    for (const l of lines) bot.chat(l);
+  // Note: bare "help" used to trigger combat-assist (navigation.js's IS_HELP) —
+  // reclaimed for this list; assist still works via "assist", "guard me", etc.
+  if (IS_HELP_CMD.test(lower)) {
+    for (const l of getHelpLines()) bot.chat(l);
     return true;
   }
 
@@ -109,9 +117,10 @@ async function handle(bot, lower, raw) {
     lines.push(`Mapper: ${nResolved} resolved, ${nDiscovered} discovered, ${nDb} in DB`);
 
     // Services (parallel)
+    const solsaiBase = getSolsaiBase();
     const [letta, ctxMod, viewer3d, viewerInv] = await Promise.all([
       ping(LETTA_URL.replace(/\/messages$/, ''), 2000),
-      ping('http://127.0.0.1:8080/blocknames?sids=1'),
+      ping(`http://${solsaiBase.host}:${solsaiBase.port}/blocknames?sids=1`),
       ping('http://127.0.0.1:3007'),
       ping('http://127.0.0.1:3000'),
     ]);
@@ -310,4 +319,4 @@ async function handle(bot, lower, raw) {
   return false;
 }
 
-module.exports = { handle };
+module.exports = { handle, getHelpLines, IS_HELP_CMD };

@@ -17,6 +17,23 @@ rl.on('close', () => process.exit(0));
 
 let ws;
 
+// Rate-limit the "[disconnected]" notice so a flapping connection (e.g. the
+// service restarting, or being down for a while) doesn't spam the terminal —
+// reconnect attempts themselves are unaffected and keep firing every 3s.
+const DISCONNECT_NOTICE_MIN_GAP_MS = 60_000;  // max 1/min
+const DISCONNECT_NOTICE_MAX_PER_HOUR = 6;
+let disconnectNoticeTimes = [];
+
+function notifyDisconnected() {
+  const now = Date.now();
+  disconnectNoticeTimes = disconnectNoticeTimes.filter(t => now - t < 3_600_000);
+  const last = disconnectNoticeTimes[disconnectNoticeTimes.length - 1] ?? -Infinity;
+  if (now - last < DISCONNECT_NOTICE_MIN_GAP_MS) return;
+  if (disconnectNoticeTimes.length >= DISCONNECT_NOTICE_MAX_PER_HOUR) return;
+  disconnectNoticeTimes.push(now);
+  process.stdout.write(Y('[disconnected — retrying in 3s]\n'));
+}
+
 function connect() {
   ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
 
@@ -26,15 +43,24 @@ function connect() {
     rl.prompt();
   });
 
-  ws.on('message', msg => {
+  ws.on('message', raw => {
+    let text = raw.toString();
+    let color = C;
+    try {
+      const payload = JSON.parse(text);
+      text = payload.text ?? text;
+      if (payload.type === 'error') color = Y;
+      else if (payload.type === 'status') color = DIM;
+    } catch (_) { /* not JSON — print as-is */ }
+
     process.stdout.clearLine(0);
     process.stdout.cursorTo(0);
-    process.stdout.write(C(`nilo: ${msg}\n`));
+    process.stdout.write(color(`nilo: ${text}\n`));
     rl.prompt();
   });
 
   ws.on('close', () => {
-    process.stdout.write(Y('[disconnected — retrying in 3s]\n'));
+    notifyDisconnected();
     setTimeout(connect, 3000);
   });
 

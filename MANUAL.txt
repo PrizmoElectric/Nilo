@@ -23,6 +23,10 @@ follow / me segue / vem comigo / me acompanha / fica comigo
 come here / vem aqui / chega aqui / vem até mim
   Nilo para o comportamento atual e caminha até o MASTER (dist=2).
 
+go there / walk there / head there / vai ali / vai lá
+  Nilo caminha até a posição que o MASTER está mirando (mesmo raycast do
+  comando "this"), block ou entidade. Fica parado ao chegar.
+
 closer / fique mais perto / fica mais perto / mais perto
   Nilo segue o MASTER bem de perto (dist=1).
 
@@ -50,8 +54,9 @@ unstuck / destravar / sai do caminho / se mexe / move-te
 go away / vai embora / me deixa / para de me seguir / sai daqui
   Para de seguir, entra em modo idle.
 
-help / assist / protect me / me ajuda / me protege / me cobre / me escolta
+assist / protect me / watch my back / i need help / defend me / guard me / cover me / fight with me / fight for me / me ajuda / me ajude / me protege / preciso de ajuda / me cobre / me defende / me escolta
   Modo de assistência em combate: segue e ataca mobs ao lado do MASTER.
+  (nota: "help" sozinho foi reclamado por #help, veja abaixo)
 
 tp me / tp here / tp para mim / vem aqui agora
   Teleporta Nilo para a posição do MASTER via /tp.
@@ -534,56 +539,56 @@ COMANDOS ADMIN (prefixo #nilo obrigatório em jogo)
 COMANDOS EXCLUSIVOS DO DISCORD
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-!status
+#status
   Status resumido: posição, vida, fome, modo, skills, autônomo.
 
-!skills
+#skills
   Lista as skills aprendidas.
 
-!help
+#help
   Exibe a lista de comandos disponíveis no Discord.
 
-!autonomous on / !autonomous off
+#autonomous on / #autonomous off
   Liga/desliga o modo autônomo.
 
-!skill list
+#skill list
   Lista todas as skills.
 
-!skill learn <tarefa>
+#skill learn <tarefa>
   Aprende nova skill via IA (Nilo precisa estar online).
 
-!skill run <nome>
+#skill run <nome>
   Executa skill pelo nome (Nilo precisa estar online).
 
-!skill forget <nome>
+#skill forget <nome>
   Deleta uma skill.
 
-!goal <tarefa>
+#goal <tarefa>
   Adiciona tarefa ao currículo autônomo.
 
-!trust <jogador> / !untrust <jogador> / !trusted
+#trust <jogador> / #untrust <jogador> / #trusted
   Gerencia a lista de confiança.
 
-!behavior <modo>
+#behavior <modo>
   Define o modo de comportamento: idle, follow, sit, wander, attack, defensive, passive, fishing, bow.
 
-!behavior clear
+#behavior clear
   Limpa o comportamento e retorna ao modo idle.
 
-!server list
+#server list
   Lista os perfis de servidor em servers.json.
 
-!server add <nome> <host> [porta]
+#server add <nome> <host> [porta]
   Adiciona um novo perfil com o host e porta informados e conecta imediatamente.
-  Porta padrão: 25565. Exemplo: !server add hoskes server.free.hoskes.top 25565
+  Porta padrão: 25565. Exemplo: #server add hoskes server.free.hoskes.top 25565
 
-!server switch <nome>
+#server switch <nome>
   Troca para um perfil existente e reconecta.
 
-!server current
+#server current
   Mostra o servidor ativo.
 
-!server save <nome>
+#server save <nome>
   Salva o servidor atual como um novo perfil.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

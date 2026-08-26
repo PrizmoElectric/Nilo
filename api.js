@@ -5,7 +5,7 @@ const http = require('http');
 const fs   = require('fs');
 const path = require('path');
 const state = require('./state');
-const { BOT_USERNAME } = require('./config');
+const { BOT_USERNAME, getSolsaiBase } = require('./config');
 
 const COCKPIT_PATH = path.join(__dirname, 'public', 'cockpit.html');
 
@@ -106,15 +106,33 @@ function buildState(bot) {
   };
 }
 
-// Pushes a bot's behavior mode to Solsai's /bot-mode endpoint, keyed by player
-// name — this is what lets prizmo-system's HUD mode-color ESP boxes (and the
-// inventory peek, which polls /bot-inventory per name) work for any bot, not
-// just NILO. Exported so clones.js can push their own modes the same way.
-function pushModeToSolsai(player, mode) {
+// Pushes a bot's behavior mode (+ a short free-text "current action" line) to
+// Solsai's /bot-mode endpoint, keyed by player name — this is what lets
+// prizmo-system's HUD mode-color ESP boxes (and the inventory peek, which
+// polls /bot-inventory per name) work for any bot, not just NILO. Exported so
+// clones.js can push their own modes the same way (action optional there).
+function pushModeToSolsai(player, mode, action) {
   const p = encodeURIComponent(player || 'NILO');
   const m = encodeURIComponent(mode || 'idle');
-  http.get(`http://localhost:8080/bot-mode?player=${p}&mode=${m}`, res => res.resume())
+  const a = encodeURIComponent(action || '');
+  const { host, port } = getSolsaiBase();
+  http.get(`http://${host}:${port}/bot-mode?player=${p}&mode=${m}&action=${a}`, res => res.resume())
       .on('error', () => {});
+}
+
+// Cheap, best-effort one-liner for the status/chat screen's ACTION field —
+// deliberately not a fully modeled "current task" system, just the handful
+// of states that are already tracked and worth surfacing.
+function deriveCurrentAction(bot) {
+  if (state.isMining) return 'Mining';
+  if (state.isFarming) return 'Farming';
+  if (state.isLooting) return 'Looting';
+  if (state.combatTarget) return `Fighting ${state.combatTarget}`;
+  if (state.behaviorMode === 'tunneling') return 'Tunneling';
+  if (state.behaviorMode === 'follow') return 'Following';
+  if (state.behaviorMode === 'wander') return 'Wandering';
+  if (bot.pathfinder?.goal) return 'Moving';
+  return 'Idle';
 }
 
 function startApi(bot) {
@@ -162,7 +180,7 @@ function startApi(bot) {
 
   // Push behavior mode to Solsai every 2s so the client HUD doesn't need port 3008
   const pushInterval = setInterval(() => {
-    if (_bot && _bot.entity) pushModeToSolsai(BOT_USERNAME, state.behaviorMode);
+    if (_bot && _bot.entity) pushModeToSolsai(BOT_USERNAME, state.behaviorMode, deriveCurrentAction(_bot));
   }, 2000);
   _server.on('close', () => clearInterval(pushInterval));
 

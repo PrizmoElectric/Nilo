@@ -7,10 +7,8 @@ const fs     = require('fs');
 const path   = require('path');
 const Vec3   = require('vec3');
 const { clearBehavior } = require('./behavior');
-const { MASTER } = require('./config');
+const { MASTER, getSolsaiBase } = require('./config');
 
-const CONTEXT_MOD_HOST = 'localhost';
-const CONTEXT_MOD_PORT = 8080;
 const MIRRORS_DIR      = path.join(__dirname, 'mirrors');
 const POLL_MS          = 50;
 
@@ -24,8 +22,9 @@ let recording      = null;   // { filePath, startTime, events[], meta{} }
 
 function pollEvents() {
   return new Promise((resolve) => {
+    const { host, port } = getSolsaiBase();
     const req = http.get(
-      { host: CONTEXT_MOD_HOST, port: CONTEXT_MOD_PORT, path: '/mirror-events', timeout: 200 },
+      { host, port, path: '/mirror-events', timeout: 200 },
       (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);

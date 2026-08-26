@@ -21,16 +21,15 @@ const { installEasyAuth } = require('./easyauth');
 const { buildOpenableIds, createMovements, installDoorOpener, applyServerBlockOverrides } = require('./movement');
 const { installFreyrListeners, findFreyrEntity, summonFreyr, returnFreyr, hasFreyrItem } = require('./freyr');
 const { isHostileMob, equipBestMeleeWeapon } = require('./combat');
-const { getServerConfig, BOT_USERNAME } = require('./config');
+const { getServerConfig, getSolsaiBase, BOT_USERNAME } = require('./config');
 const { pushModeToSolsai } = require('./api');
 const state = require('./state');
 
 // Solsai HTTP API (server-side Fabric mod) — gives us instant, server-authoritative
 // inventory queries and transfers between players, no physical toss/walk/pickup needed.
-const SOLSAI_HOST = process.env.CONTEXT_MOD_HOST || '127.0.0.1';
-const SOLSAI_PORT = parseInt(process.env.CONTEXT_MOD_PORT || '8080', 10);
 function solsaiGet(path) {
   return new Promise((resolve, reject) => {
+    const { host: SOLSAI_HOST, port: SOLSAI_PORT } = getSolsaiBase();
     const req = http.get({ host: SOLSAI_HOST, port: SOLSAI_PORT, path }, res => {
       let buf = '';
       res.on('data', d => { buf += d; });
@@ -45,11 +44,13 @@ function solsaiGet(path) {
 }
 
 // Path to Nilo's real skin PNG as seen by the Minecraft server process inside
-// its container (volume-mounted ./data -> /data). FabricTailor's
-// "/skin set upload <variant> <path>" reads this file directly off the
-// server's disk — see the comment at the call site for why URL-based methods
-// don't work on a LAN-only bridge.
-const NILO_SKIN_SERVER_PATH = '/data/SerialDesignation_N-V2.png';
+// its container (volume-mounted ./data -> /data). FabricTailor reinstalled
+// (2026-08-23) — SkinsRestorer's URL-based skin route needs MineSkin.org to
+// fetch it, and MineSkin rejects any private/LAN address outright, so a
+// local static-file-server URL could never work there. FabricTailor's
+// "/skin set upload <variant> <path>" reads this file straight off the
+// server's disk instead — no external service, no network dependency.
+const NILO_SKIN_SERVER_PATH = '/data/Skins/Nilo_mk1.png';
 
 const FREYR_POLL_MS    = 4000; // how often each clone checks the shared Freyr toggle
 const BEHAVIOR_TICK_MS = 800;  // how often each clone re-evaluates follow/fight
@@ -151,17 +152,15 @@ function spawnClone(index) {
     teleportNearMaster(bot);
     // "/skin set NILO" only copies whatever skin the NILO *account* currently
     // has server-side (the default Steve — Nilo's look is a viewer-only
-    // cosmetic swap, not a real FabricTailor skin). "/skin set <url>" also
-    // doesn't work here: FabricTailor hands the URL to mineskin.org, which
-    // then has to fetch it itself — and 192.168.1.100 is a private LAN IP
-    // mineskin.org's servers can't reach (confirmed: command ran with no
-    // error but never actually changed the skin). FabricTailor's
-    // "/skin set upload <classic|slim> <local file path>" instead reads the
-    // file straight off the SERVER's disk and uploads its bytes directly —
-    // verified working live with the file already sitting at
-    // /data/SerialDesignation_N-V2.png inside the server container (the same
-    // PNG Nilo's viewer cosmetic uses). Run by the clone itself — skin
-    // commands always target the sender, so rcon/console can't do this for it.
+    // cosmetic swap, not a real FabricTailor skin). "/skin set <url>" fails
+    // for the same reason FabricTailor's URL mode always has: it hands the
+    // URL to mineskin.org, which fetches it itself, and any private/LAN
+    // address is unreachable from there (confirmed again 2026-08-23, this
+    // time via SkinsRestorer's equivalent "the url host is not allowed").
+    // "upload" reads the file straight off the server's own disk instead —
+    // no third-party service, no network dependency. Run by the clone
+    // itself — skin commands always target the sender, so rcon/console
+    // can't do this for it.
     bot.chat(`/skin set upload slim ${NILO_SKIN_SERVER_PATH}`);
     freyrTimer    = setInterval(() => tickFreyr(bot).catch(() => {}), FREYR_POLL_MS);
     behaviorTimer = startCloneBehavior(bot);

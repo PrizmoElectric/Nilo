@@ -72,7 +72,10 @@ function startProximityMonitor(bot) {
     if (bot.health > LOW_HEALTH) lowHealthWarned = false;
 
     // ── Threat scan ───────────────────────────────────────────────────────
-    if (state.behaviorMode === 'follow' || state.behaviorMode === 'idle' || state.behaviorMode === 'wander') {
+    // Skipped while possessed — auto-engaging combat here would fight the possessing
+    // player's own movement/attack input (remote-control.js sets state.possessed).
+    if (!state.possessed &&
+        (state.behaviorMode === 'follow' || state.behaviorMode === 'idle' || state.behaviorMode === 'wander')) {
       const now2 = Date.now();
       if (now2 - startTime > STARTUP_GRACE_MS) {
         const nearbyHostiles = Object.values(bot.entities).filter(e =>
@@ -140,6 +143,10 @@ function startAutonomousBehaviors(bot) {
   const seenStrayUUIDs  = new Set();
 
   state.autonomousInterval = setInterval(async () => {
+    // Skipped entirely while possessed — natural-look would fight the possessing player's
+    // own camera control, and exploration would walk Nilo away mid-session either way.
+    if (state.possessed) return;
+
     if (strayScanCooldown > 0) {
       strayScanCooldown--;
     } else {

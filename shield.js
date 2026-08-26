@@ -14,11 +14,12 @@
 //   GET /shield-unfocus?player=X                            — return to Fibonacci dome
 
 const http = require('http');
-const { SOLSAI_HOST = 'localhost', SOLSAI_PORT = 8080 } = process.env;
+const { getSolsaiBase } = require('./config');
 
 function solsaiGet(path) {
   return new Promise(resolve => {
-    const req = http.get({ host: SOLSAI_HOST, port: SOLSAI_PORT, path }, res => {
+    const { host, port } = getSolsaiBase();
+    const req = http.get({ host, port, path }, res => {
       let body = '';
       res.on('data', d => { body += d; });
       res.on('end', () => resolve(body));

@@ -70,6 +70,24 @@ function getServerConfig() {
   return _activeServer;
 }
 
+// Solsai (ContextMod.java) runs inside the SAME process as the Minecraft
+// server, on whichever machine that's docker-compose'd on (currently Apollo)
+// — NOT necessarily the machine Nilo's own node process happens to be
+// running on (e.g. during a NOX failover). Host must track the active
+// server's host, never hardcode localhost. Port is 8081, not the 8080 that
+// every SOLSAI_PORT/CONTEXT_MOD_PORT default in this codebase used to assume
+// — Apollo's docker-compose.yml maps the container's internal 8080 (Solsai)
+// to host port 8081, since host 8080 is already SearXNG (confirmed via
+// `docker port prominence2`: "8080/tcp -> 0.0.0.0:8081"). Getting either the
+// host or the port wrong looks identical from the caller's side: silent
+// failure (ECONNREFUSED, or a 404 from the wrong service on Apollo itself).
+function getSolsaiBase() {
+  return {
+    host: process.env.SOLSAI_HOST || getServerConfig().host,
+    port: parseInt(process.env.SOLSAI_PORT || '8081', 10),
+  };
+}
+
 function getActiveServerName() {
   return _activeServerName;
 }
@@ -110,6 +128,6 @@ module.exports = {
   BOT_USERNAME, MASTER, LETTA_URL, OLLAMA_URL, OLLAMA_MODEL, NILO_FALLBACK_PERSONA, SEARXNG_URL, CONFIG_PATH, SERVERS_PATH,
   DISCORD_TOKEN, DISCORD_CHANNEL_ID, DISCORD_MASTER_ID,
   MATURE_CROPS, DEATH_VERBS, ADVANCEMENT_RE, JOIN_RE, LEAVE_RE,
-  getServerConfig, setActiveServer, getActiveServerName, loadServers, addServer,
+  getServerConfig, getSolsaiBase, setActiveServer, getActiveServerName, loadServers, addServer,
   loadConfig, saveConfig,
 };

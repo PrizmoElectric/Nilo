@@ -115,9 +115,11 @@ function parseAction(raw) {
 const CHAT_MAX = 250;
 const CHAT_DELAY_MS = 350;
 
-async function chatLong(bot, text) {
+// sendFn defaults to public bot.chat — pass e.g. `t => bot.whisper(username, t)`
+// to keep a reply private (used by nilo.js's whisper handler).
+async function chatLong(bot, text, sendFn = (t) => bot.chat(t)) {
   if (!text) return;
-  if (text.length <= CHAT_MAX) { bot.chat(text); return; }
+  if (text.length <= CHAT_MAX) { sendFn(text); return; }
 
   const chunks = [];
   let remaining = text;
@@ -131,7 +133,7 @@ async function chatLong(bot, text) {
 
   for (let i = 0; i < chunks.length; i++) {
     if (i > 0) await new Promise(r => setTimeout(r, CHAT_DELAY_MS));
-    bot.chat(chunks[i]);
+    sendFn(chunks[i]);
   }
 }
 

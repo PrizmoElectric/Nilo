@@ -5,15 +5,15 @@
 
 const http  = require('http');
 const { applyGroundTruth, getDiscovered, getResolved } = require('./registry-patch');
+const { getSolsaiBase } = require('./config');
 
-const HOST     = process.env.CONTEXT_MOD_HOST || '127.0.0.1';
-const PORT     = parseInt(process.env.CONTEXT_MOD_PORT || '8080', 10);
 const BATCH    = 200;   // max stateIds per HTTP request
 const INTERVAL = 15000; // ms between sweeps
 
 function httpGet(path) {
   return new Promise((resolve, reject) => {
-    const req = http.get({ host: HOST, port: PORT, path }, res => {
+    const { host, port } = getSolsaiBase();
+    const req = http.get({ host, port, path }, res => {
       let buf = '';
       res.on('data', d => { buf += d; });
       res.on('end', () => {

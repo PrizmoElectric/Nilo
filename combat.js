@@ -46,6 +46,16 @@ function isHostileMob(entity) {
   return HOSTILE_MOBS.has(name) || entity.type === 'hostile' || entity.kind === 'Hostile mobs';
 }
 
+// Same modded-registry fallback as isHostileMob, for display purposes.
+function mobDisplayName(entity) {
+  if (!entity.name || entity.name === 'unknown') {
+    const { getModdedEntityName } = require('./registry-patch');
+    const moddedName = entity.entityType != null ? getModdedEntityName(entity.entityType) : null;
+    if (moddedName) return moddedName.replace(/^[a-z_]+:/, '');
+  }
+  return entity.name || entity.displayName || 'mob';
+}
+
 // ── Arrow physics constants ───────────────────────────────────────────────────
 
 const ARROW_GRAVITY   = 0.05;   // blocks/tick² — applied every tick
@@ -162,9 +172,16 @@ async function combatTick(bot, anchorPos) {
   // fatal hit lands, so anything gated on bot.health being already low was
   // too late against any single hit dealing more than a few hearts.
 
+  // Skipped entirely while possessed — every movement/lookAt/pathfinder call below would
+  // otherwise fight the possessing player's own input, same reasoning as monitor.js's
+  // threat-scan/autonomous-behaviors guards (remote-control.js sets state.possessed).
+  if (state.possessed) return false;
+
   const anchor = anchorPos || bot.entity.position;
   const target = bot.nearestEntity(e => isHostileMob(e) && e.position && e.position.distanceTo(anchor) < 24);
-  if (!target) return false;
+  if (!target) { state.combatTarget = null; return false; }
+  // Surfaced via api.js's action push (prizmo-system's status/chat screen shows it).
+  state.combatTarget = mobDisplayName(target);
 
   const dist = target.position.distanceTo(bot.entity.position);
 
@@ -441,6 +458,10 @@ function startBowMode(bot) {
   const SHOT_CD = 2200; // ms — minimum gap between shots regardless of skill speed
 
   state.behaviorInterval = setInterval(async () => {
+    // Skipped while possessed — unlike startAttack/startAssist, this loop does its own
+    // hostile-mob detection, pathfinder goals, and shooting instead of going through
+    // combatTick(), so it needs its own guard (remote-control.js sets state.possessed).
+    if (state.possessed) return;
     if (state.behaviorMode !== 'bow') return;
     if (shooting) return;
     if (Date.now() - lastShot < SHOT_CD) return;

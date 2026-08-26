@@ -1,0 +1,13 @@
+diff --git a/node_modules/mineflayer-spectator/dist/handlers/entities.js b/node_modules/mineflayer-spectator/dist/handlers/entities.js
+index 84343f0..0474c47 100644
+--- a/node_modules/mineflayer-spectator/dist/handlers/entities.js
++++ b/node_modules/mineflayer-spectator/dist/handlers/entities.js
+@@ -209,6 +209,8 @@ async function registerEntityListeners(bot, server) {
+         if (!entity || !entity.name)
+             return;
+         const entityData = bot.registry.entitiesByName[entity.name];
++        if (!entityData)
++            return; // modded/unregistered entity type — not in the vanilla registry
+         if (!entityData.metadataKeyTypes)
+             entityData.metadataKeyTypes = [];
+         for (const { key, type } of d.metadata) {

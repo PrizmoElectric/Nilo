@@ -10,6 +10,14 @@ const { getModdedBlockName, findBlocksByName } = require('../registry-patch');
 const { findBlockPositions } = require('../skills/scan');
 const { getPlayerGazeTarget } = require('../gaze');
 
+// Equip confirmations/failures go here instead of public bot.chat() — visibly
+// putting on armor is one thing, but announcing it to the whole server chat
+// (and by extension Discord, since discord-bridge.js's chat wrapper skips
+// mirroring anything starting with "/") isn't something MASTER wants public.
+function tellMaster(bot, text) {
+  bot.chat(`/msg ${MASTER} ${text}`);
+}
+
 const STORAGE_KEYWORDS = [
   'chest', 'barrel', 'crate', 'storage', 'bin', 'locker', 'safe',
   'cabinet', 'trunk', 'box', 'vault', 'strongbox', 'terminal', 'interface', 'grid', 'cable_bus',
@@ -321,13 +329,13 @@ async function handle(bot, lower, raw, username) {
   if (/\b(equip this|equip that|equipa isso|equipa ess[ae]|veste ess[ae]|equipa aqui)\b/.test(lower)) {
     await pickupNearestItem(bot, 8);
     const item = bot.inventory.items().find(isEquippable);
-    if (!item) { bot.chat("Nothing equippable on me."); return true; }
+    if (!item) { tellMaster(bot, "Nothing equippable on me."); return true; }
     const dest = getEquipDestination(item);
     try {
       await bot.equip(item, dest);
-      bot.chat(`Equipped ${itemLabel(item)}.`);
+      tellMaster(bot, `Equipped ${itemLabel(item)}.`);
       if (dest === 'hand' && (state.behaviorMode === 'attack' || state.behaviorMode === 'defensive')) equipShield(bot);
-    } catch (_) { bot.chat("Couldn't equip that."); }
+    } catch (_) { tellMaster(bot, "Couldn't equip that."); }
     return true;
   }
 
@@ -341,13 +349,13 @@ async function handle(bot, lower, raw, username) {
       // resolveItemName checks the modded registry too — i.name is 'unknown' for modded items.
       const item  = inv.find(i => resolveItemName(i).includes(query))
                  ?? inv.find(i => query.split('_').every(w => resolveItemName(i).includes(w)));
-      if (!item) { bot.chat(`I don't have a ${query}.`); return true; }
+      if (!item) { tellMaster(bot, `I don't have a ${query}.`); return true; }
       const dest = getEquipDestination(item);
       try {
         await bot.equip(item, dest);
-        bot.chat(`Equipped ${itemLabel(item)}.`);
+        tellMaster(bot, `Equipped ${itemLabel(item)}.`);
         if (dest === 'hand' && (state.behaviorMode === 'attack' || state.behaviorMode === 'defensive')) equipShield(bot);
-      } catch (_) { bot.chat(`Couldn't equip ${itemLabel(item)}.`); }
+      } catch (_) { tellMaster(bot, `Couldn't equip ${itemLabel(item)}.`); }
       return true;
     }
   }

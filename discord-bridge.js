@@ -33,6 +33,8 @@ const { DISCORD_TOKEN, DISCORD_CHANNEL_ID, DISCORD_MASTER_ID, BOT_USERNAME, MAST
 let discordClient  = null;
 let bridgeChannel  = null;
 let _botRef        = null;  // set on init
+let lastAwakeNoticeTime = 0; // when "NILO is awake" last posted — suppresses a redundant "joined Minecraft" right after
+const JOIN_NOTICE_SUPPRESS_MS = 5 * 60 * 1000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -155,6 +157,7 @@ async function handleDiscordMessage(message) {
 async function _handleDiscordMessage(message) {
   const bot      = _botRef;  // may be null if Nilo is offline
   const isMaster = message.author.id === DISCORD_MASTER_ID;
+  const speakerName = message.author.username; // who's actually typing — never assume it's MASTER
   const content  = message.content.trim();
   const lower    = content.toLowerCase();
 
@@ -436,7 +439,7 @@ async function _handleDiscordMessage(message) {
         const inv  = getInventorySummary(bot);
         const held = bot.heldItem ? bot.heldItem.name : 'nothing';
         const actionHint = `[Available actions — if the message implies one, append [ACTION: name]: follow, stay, sit, stop, come, closer, unstuck, dance, fish, stop_fish, bow, shoot_target, tunnel, build_house, sleep, wander, attack, defensive, passive, explore, stop_explore, collect_grave, wave, spin, jump, ensure_tools]`;
-        ctx = `${sessionHintFor(MASTER)}${searchPrefix}${replyContext}${MASTER} says (via Discord): ${cleaned}\n[inventory: ${inv}, holding: ${held}]\n${actionHint}`;
+        ctx = `${sessionHintFor(MASTER)}${searchPrefix}${replyContext}${speakerName} says (via Discord): ${cleaned}\n[inventory: ${inv}, holding: ${held}]\n${actionHint}`;
 
         const raw = await queryLetta(ctx);
         const { text, action } = parseAction(raw);
@@ -444,7 +447,7 @@ async function _handleDiscordMessage(message) {
         if (text)   bot.chat(text);  // monkey-patch handles Discord, skips in-game (discordContext=true)
         if (action) dispatchAction(bot, action, MASTER);
       } else {
-        ctx = `${sessionHintFor(MASTER)}${searchPrefix}${replyContext}${MASTER} says (via Discord): ${cleaned}`;
+        ctx = `${sessionHintFor(MASTER)}${searchPrefix}${replyContext}${speakerName} says (via Discord): ${cleaned}`;
 
         const raw = await queryLetta(ctx);
         const { text } = parseAction(raw);
@@ -491,7 +494,13 @@ function startDiscord() {
     console.log(`[DISCORD] Logged in as ${discordClient.user.tag}`);
     try {
       bridgeChannel = await discordClient.channels.fetch(DISCORD_CHANNEL_ID);
-      await toDiscord(`NILO is awake. Type \`#status\` to check in.`);
+      const now = new Date().toLocaleString('en-GB', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      });
+      lastAwakeNoticeTime = Date.now();
+      await toDiscord(`NILO is awake (${now}). Type \`#status\` to check in.`);
     } catch (err) {
       console.error('[DISCORD] Could not fetch bridge channel:', err.message);
     }
@@ -516,18 +525,27 @@ function startDiscord() {
 
 function attachBot(bot) {
   _botRef = bot;
-  toDiscord('**NILO joined Minecraft.** Type `#status` to check in.');
+  // Skip this notice if we just posted "NILO is awake" — both firing back to
+  // back on a normal startup is redundant noise in the channel.
+  if (Date.now() - lastAwakeNoticeTime > JOIN_NOTICE_SUPPRESS_MS) {
+    toDiscord('**NILO joined Minecraft.** Type `#status` to check in.');
+  }
 
-  // Wrap bot.chat so responses go to the right place:
-  //   discordContext=false → in-game only, then mirror to Discord
-  //   discordContext=true  → Discord only (message came from Discord, don't echo back in-game)
+  // Wrap bot.chat so a reply only ever goes back to the channel that
+  // triggered it — Discord, the terminal CLI, and real in-game chat are kept
+  // fully separate, never mirrored into each other:
+  //   discordContext=true  → Discord only (message came from Discord)
+  //   discordContext=false → in-game/CLI only (real chat + CLI forward — see
+  //                          nilo.js's own bot.chat patch — never posted to Discord)
   const origChat = bot.chat.bind(bot);
   bot.chat = function(text) {
-    if (!state.discordContext) origChat(text);
-    // Any slash-command (skin, tp, execute, login, etc.) is a server
-    // instruction, not something Nilo "said" — never leak it to Discord.
-    if (/^\//.test(text)) return;
-    toDiscord(`**NILO:** ${text}`);
+    if (state.discordContext) {
+      // Any slash-command (skin, tp, execute, login, etc.) is a server
+      // instruction, not something Nilo "said" — never leak it to Discord.
+      if (!/^\//.test(text)) toDiscord(`**NILO:** ${text}`);
+      return;
+    }
+    origChat(text);
   };
 
   // Other players chat

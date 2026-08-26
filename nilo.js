@@ -60,9 +60,18 @@ const { installFreyrListeners } = freyr;
 
 const CONVERSATION_WINDOW_MS = 30000; // 30s after last interaction, no trigger needed
 const PROXIMITY_CHAT_RANGE   = 12;    // blocks — within this range, no trigger needed
-const NILO_SKIN_SERVER_PATH  = '/data/SerialDesignation_N-V2.png';
+// FabricTailor reinstalled (2026-08-23) — SkinsRestorer's /skin url route
+// needs MineSkin.org to fetch the URL itself, and MineSkin rejects any
+// private/LAN address outright ("the url host is not allowed"), so no local
+// static-file-server address could ever work there. FabricTailor's "upload"
+// reads the file straight off the server's own disk instead — no external
+// service, no signature, no network dependency.
+const NILO_SKIN_SERVER_PATH = '/data/Skins/Nilo_mk1.png';
 const SPECTATOR_PORT     = parseInt(process.env.SPECTATOR_PORT || '25566', 10);
 const SPECTATOR_PASSWORD = process.env.SPECTATOR_PASSWORD || 'nilo123';
+
+// Shared by the in-game chat handler and the CLI's Letta fallback.
+const ACTION_HINT = '[ACTIONS: if and only if the message is a direct command to move or do something physical, append [ACTION: name] at the very end — after your words, never instead of them. If no action applies, omit the tag entirely. Do not use stand as a default. Valid actions: follow, stay, sit, stop, come, closer, unstuck, dance, fish, stop_fish, bow, shoot_target, tunnel, build_house, sleep, wander, attack, guard, defensive, passive, explore, stop_explore, collect_grave, wave, spin, jump, ensure_tools, sneak, stand]';
 
 // createBot() runs again on every reconnect (bot.on('end', ...) below) — this
 // module-level handle lets each run close the PREVIOUS spectator server (still
@@ -387,15 +396,19 @@ function createBot() {
     // Same reachability check nilo_begin.fish uses, polled periodically.
     if (require('os').hostname() === 'NOX') {
       const failoverWatchdog = setInterval(async () => {
-        try {
-          const { default: fetch } = await import('node-fetch');
-          const res = await fetch('http://192.168.1.101:8283/v1/agents/', {
-            signal: AbortSignal.timeout(3000),
-          });
-          if (!res.ok) return;
-        } catch (_) {
-          return; // Apollo still unreachable — stay up
-        }
+        // Checks Apollo's own Nilo CLI port (4000), not Letta (8283) — Letta
+        // runs as its own always-on service independent of nilo.service, so
+        // it being reachable proved nothing about whether Nilo itself was
+        // running on Apollo. That bug made this fire on every tick regardless
+        // of Apollo's actual Nilo state, yielding/exiting every 5 minutes.
+        const net = require('net');
+        const apolloNiloUp = await new Promise(resolve => {
+          const sock = net.connect({ host: '192.168.1.101', port: 4000, timeout: 3000 });
+          sock.once('connect', () => { sock.destroy(); resolve(true); });
+          sock.once('timeout', () => { sock.destroy(); resolve(false); });
+          sock.once('error', () => resolve(false));
+        });
+        if (!apolloNiloUp) return; // Apollo's Nilo not running — stay up
 
         console.warn('[FAILOVER] Apollo is back online — yielding (NOX was only a fallback).');
         clearInterval(failoverWatchdog);
@@ -466,6 +479,12 @@ function createBot() {
 
   bot.on('chat', async (username, message) => {
     if (username === BOT_USERNAME) return;
+
+    // "!" is accepted as an alias for "#" in-game (matches old muscle memory from
+    // before the # migration) — canonicalize once here so every "#..." check below,
+    // including the "#nilo" admin gate, works unchanged. Nothing else in-game uses
+    // "!" for anything, so this can't collide with another meaning.
+    if (message.startsWith('!')) message = '#' + message.slice(1);
 
     const lower    = message.toLowerCase();
     const mentioned = lower.includes('nilo') || lower.startsWith('#nilo');
@@ -667,15 +686,15 @@ function createBot() {
     }
 
     // ── Send to Letta ─────────────────────────────────────────────────────
-    const cleaned = message
+    // Everything goes to the LLM, even just being called by name with no
+    // other content — a hardcoded reply here would be exactly the kind of
+    // scripted shortcut OBJECTIVE.txt rules out.
+    let cleaned = message
       .replace(/#nilo\s*/i, '')
       .replace(/\bnilo\b[,:]?\s*/i, '')
       .trim();
 
-    if (!cleaned) {
-      bot.chat(`Hey ${username}.`);
-      return;
-    }
+    if (!cleaned) cleaned = '(just said my name, getting my attention)';
 
     console.log(`[NILO] ${username}: ${cleaned}`);
 
@@ -683,10 +702,9 @@ function createBot() {
       const inv    = getInventorySummary(bot);
       const held   = bot.heldItem ? bot.heldItem.name : 'nothing';
       const lang   = detectLanguage(cleaned);
-      const actionHint = `[ACTIONS: if and only if the message is a direct command to move or do something physical, append [ACTION: name] at the very end — after your words, never instead of them. If no action applies, omit the tag entirely. Do not use stand as a default. Valid actions: follow, stay, sit, stop, come, closer, unstuck, dance, fish, stop_fish, bow, shoot_target, tunnel, build_house, sleep, wander, attack, guard, defensive, passive, explore, stop_explore, collect_grave, wave, spin, jump, ensure_tools, sneak, stand]`;
       const searchCtx = await getSearchContext(cleaned);
       const searchPrefix = searchCtx ? `${searchCtx}\n\n` : '';
-      const ctx  = `${sessionHintFor(username)}${searchPrefix}${username} says: ${cleaned}\n[My inventory: ${inv}. Holding: ${held}. Respond in: ${lang}]\n${actionHint}`;
+      const ctx  = `${sessionHintFor(username)}${searchPrefix}${username} says: ${cleaned}\n[My inventory: ${inv}. Holding: ${held}. Respond in: ${lang}]\n${ACTION_HINT}`;
       const raw  = await queryLetta(ctx);
       const { text, action } = parseAction(raw);
       console.log(`[NILO] -> ${text}${action ? ` [ACTION: ${action}]` : ''}`);
@@ -696,6 +714,39 @@ function createBot() {
     } catch (err) {
       console.error('[NILO] Letta error:', err.message);
       bot.chat('My thoughts are unclear right now. Try again in a moment.');
+    }
+  });
+
+  // ── Private (/msg) chat — prizmo-system's BotInteractScreen (Alt+right-click) ──
+  // MASTER-only, no "#" prefix needed — like the CLI/terminal, this is a
+  // deliberate private channel, not casual chat where accidental triggers are
+  // the concern. Command replies still go through each command's own bot.chat()
+  // (out of scope to rethread every handler's reply channel here); only the
+  // Letta conversational fallback replies privately, via bot.whisper.
+  bot.on('whisper', async (username, message) => {
+    if (username !== MASTER) return;
+    const lower = message.toLowerCase();
+
+    let acted = false;
+    try { acted = await handleNaturalCommand(bot, lower, message, username, { prefixed: true }); }
+    catch (err) { console.error('[NILO] Whisper command error:', err.message); }
+    if (acted) { state.lastInteractionTime = Date.now(); return; }
+
+    try {
+      const inv    = getInventorySummary(bot);
+      const held   = bot.heldItem ? bot.heldItem.name : 'nothing';
+      const lang   = detectLanguage(message);
+      const searchCtx = await getSearchContext(message);
+      const searchPrefix = searchCtx ? `${searchCtx}\n\n` : '';
+      const ctx  = `${sessionHintFor(username)}${searchPrefix}${username} whispers privately: ${message}\n[My inventory: ${inv}. Holding: ${held}. Respond in: ${lang}]\n${ACTION_HINT}`;
+      const raw  = await queryLetta(ctx);
+      const { text, action } = parseAction(raw);
+      state.lastInteractionTime = Date.now();
+      if (text)   await chatLong(bot, text, (t) => bot.whisper(username, t));
+      if (action) dispatchAction(bot, action, username);
+    } catch (err) {
+      console.error('[NILO] Whisper Letta error:', err.message);
+      bot.whisper(username, 'My thoughts are unclear right now. Try again in a moment.');
     }
   });
 
@@ -754,6 +805,12 @@ function createBot() {
 
   bot.on('entityHurt', (entity) => {
     if (entity !== bot.entity) return;
+    // Skipped while possessed — this is a reactive handler (fires on taking damage), separate
+    // from monitor.js's interval-based autonomous behaviors, and wasn't covered by that guard.
+    // Left unguarded, getting hit while possessed would equip gear, raise the shield, and
+    // (worse) bot.lookAt() the attacker — actively fighting the possessing player's own camera
+    // control, not just their movement.
+    if (state.possessed) return;
     const RETALIATE_MODES = new Set(['defensive', 'follow', 'idle', 'wander']);
     if (!RETALIATE_MODES.has(state.behaviorMode)) return;
     const attacker = bot.nearestEntity(e =>
@@ -880,13 +937,42 @@ function deliverSwitchFailure(sw) {
     ws.on('message', async data => {
       const message = data.toString().trim();
       if (!message) return;
+
+      // #help / help needs no game state — answer it even while the bot is
+      // offline/reconnecting, instead of failing behind the "bot not
+      // connected" gate below.
+      const stripped = message.startsWith('#') ? message.slice(1).trim() : message;
+      if (require('./commands/misc').IS_HELP_CMD.test(stripped.toLowerCase())) {
+        for (const l of require('./commands/misc').getHelpLines()) {
+          ws.send(JSON.stringify({ type: 'nilo', text: l }));
+        }
+        return;
+      }
+
       const bot = state.activeBotRef;
       if (!bot) { ws.send(JSON.stringify({ type: 'error', text: 'Bot not connected.' })); return; }
+
       try {
         // Local terminal CLI (shell access required) — treated as a dedicated
         // command console like remote-control.js's terminal channel, not
         // casual chat, so it's exempt from the # prefix requirement.
-        await handleNaturalCommand(bot, message.toLowerCase(), message, MASTER, { prefixed: true });
+        const acted = await handleNaturalCommand(bot, message.toLowerCase(), message, MASTER, { prefixed: true });
+        if (acted) return;
+
+        // No command matched — fall back to Letta, same as in-game chat does.
+        // (Previously the CLI had no Letta path at all: an unmatched message
+        // just silently did nothing, which looked like Letta "not working".)
+        ws.send(JSON.stringify({ type: 'status', text: 'thinking...' }));
+        const inv    = getInventorySummary(bot);
+        const held   = bot.heldItem ? bot.heldItem.name : 'nothing';
+        const lang   = detectLanguage(message);
+        const searchCtx = await getSearchContext(message);
+        const searchPrefix = searchCtx ? `${searchCtx}\n\n` : '';
+        const ctx  = `${sessionHintFor(MASTER)}${searchPrefix}${MASTER} says: ${message}\n[My inventory: ${inv}. Holding: ${held}. Respond in: ${lang}]\n${ACTION_HINT}`;
+        const raw  = await queryLetta(ctx);
+        const { text, action } = parseAction(raw);
+        if (text)   await chatLong(bot, text);
+        if (action) dispatchAction(bot, action, MASTER);
       } catch (err) {
         ws.send(JSON.stringify({ type: 'error', text: err.message }));
       }

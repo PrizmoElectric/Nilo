@@ -1,7 +1,2265 @@
 NILO PROJECT — PENDING ITEMS
 ============================
-Last updated: 2026-08-05 (session 17)
+Last updated: 2026-08-26 (session 41, continued three times)
 Architecture reference: agent/map.txt
+
+────────────────────────────────────────────────────────
+SESSION 41 continued — SIX-ITEM BATCH FROM THE RAW BRAINSTORM APPENDED TO
+THIS FILE (interrupt key, wider speed/spacing tiers, sequential circles,
+5-7 circle back ring, RED TERMINAL scrolling — fixes a real bug)
+────────────────────────────────────────────────────────
+Source: a second free-text brainstorm the user appended directly to this
+file (not through conversation) — "Pressing the summon key to stop the
+consecutive shots... implement 5 circle summoning, 6 circle, and 7
+circle. add scrolling to the clock so it can go down to show more
+buttons of that section." Clarified over a few rounds of Q&A before
+implementation; that raw text has been removed from the end of this file
+now that it's implemented.
+
+[x] 1. Summon key interrupts an active consecutive-fire sequence.
+    manifest() (ArrowManifestManager) now checks every ArrowGroup for
+    mgActive/burstRemaining>0 before conjuring; if any are active, it
+    clears them and returns {"interrupted":true} instead of spawning a
+    new arrow. No new endpoint — behavior change inside the existing
+    /arrow-manifest handler (the R key).
+
+[x] 2. Fire rate / flight speed — 4th "Extreme" preset tier.
+    SPEED_MULTIPLIER_MAX raised 3.0 → 6.0 server-side. ArrowWheelScreen's
+    SPEED_PRESETS/SPEED_LABELS gained 5.0/"Extreme" (both the fire-rate
+    and flight-speed rows went from 3 buttons to 4 — flight speed got the
+    same 4th tier for consistency even though "5x MG" was the literal ask).
+
+[x] 3. Wider Barrage spacing tier.
+    New SpreadPreset.EXTREME (behindMin/Max 4.0/8.0, spreadH/V 3.2/2.4 —
+    roughly double WIDE). CommandPanelScreen's existing SPACING row (the
+    only place this control lived — confirmed via grep that
+    ArrowWheelScreen has never had a spacing row) went from 3 buttons to
+    4, both render and the mirrored click-hit-test block.
+
+[x] 4. Circles: simultaneous vs. sequential (round-robin), configurable.
+    New PlayerState.circlesSequential (default false = today's unchanged
+    parallel-drain behavior). New endpoint
+    /arrow-set-circles-sequential?player=X&enabled=true|false. When true,
+    driveFireModes() dispatches to driveSequentialCircles(): one shared
+    sequentialCooldown/sequentialTurnIndex cycles through groups,
+    releasing exactly one shot per turn from the next eligible
+    (mgActive or burstRemaining>0, non-empty) group, round-robin — not
+    each circle emptying before the next starts. UI: new "FIRE ORDER"
+    toggle row in CommandPanelScreen's arrow strip (CIRCLES only).
+
+[x] 5. 5, 6, and 7-circle summons — new back ring, front 4 untouched.
+    Circle count cap raised 4 → 7. Circles 1-4 keep today's exact
+    quadrant-slot positioning, completely unchanged. Circles 5-7 sit on a
+    new back ring, positioned behind the player in the same yaw-relative
+    frame Barrage uses (not pitch-tied, so looking up/down doesn't swing
+    them) — ring radius expands with count
+    (BACK_RING_BASE_RADIUS + (backCount-1)*BACK_RING_RADIUS_STEP), evenly
+    spaced, and the whole ring slowly counter-orbits relative to each
+    turret's own internal arrow-spin (BACK_RING_ORBIT_SPEED is the
+    opposite sign and a different magnitude from ROTATION_SPEED, so the
+    two rotations read as independent layers). ArrowGroup gained
+    backRingIndex/backRingTotal; new backRingSlotCenter()/groupCenter()
+    dispatcher used by both positionTurret() and conjureOne() (the
+    session-40 spin-glitch fix's pre-spawn positioning). UI: RED
+    TERMINAL's FORMATION grid grew from 6 buttons (3x2) to 9 (3x3) for
+    Circles x5/x6/x7. Deliberately NOT added to ArrowWheelScreen (already
+    a tall standalone screen without scrolling) — RED TERMINAL, which now
+    scrolls (item 6), is the more sustainable home for an expanding
+    control set; the wheel keeps its original 4-circle cap plus the new
+    Extreme speed tier only.
+
+[x] 6. RED TERMINAL scrolling for LOADOUTS/SKILLS — fixes a real bug as
+    the same change.
+    Root cause, confirmed via the actual layout constants (not guessed):
+    renderLoadoutEnchantList()'s visible = max(0, (bottomY-topY)/LIST_ROW)
+    hit exactly 0 once the Arrow strip (fire-mode row + 3-row formation
+    grid + spacing/slots/fire-order rows) plus the "[N active]" badge
+    (which only appears once activeLoadout is non-empty — i.e. precisely
+    "after choosing an enchantment") pushed topY past the fixed CONTENT_H
+    bottom edge. This is why toggling the first enchant made "all the
+    others disappear" and why search didn't help (visible was 0
+    regardless of match count) — confirmed the fix IS the feature, not a
+    separate patch.
+    Fix: the right-column content area (strip + enchant list, in both
+    LOADOUTS and SKILLS tabs) is now a real scrollable viewport instead
+    of a fixed-height stack fighting for space:
+      - New loadoutContentScroll/loadoutContentMaxScroll (LOADOUTS_IDX)
+        and skillsContentScroll/skillsContentMaxScroll (SKILLS_IDX),
+        pixel-based, self-clamped every render frame against the actual
+        measured content height (so switching from a tall formation like
+        Circles x7 to a short one like Mage Circle can't leave the scroll
+        stuck out of range).
+      - Right column wrapped in DrawContext.enableScissor/disableScissor
+        clipped to the content rect, confirmed to exist on this
+        codebase's mapped DrawContext via javap before use.
+      - renderLoadoutEnchantList() no longer computes its visible row
+        count from leftover space below the strip — it now claims a
+        fixed LOADOUT_LIST_CAP (10) rows regardless of strip height, and
+        returns its final Y (matching renderArrowModeStrip's/
+        renderShieldModeStrip's existing return-Y pattern) so the caller
+        can measure total scrollable content height. The list's own
+        existing internal loadoutScroll (which rows of the filtered list
+        are showing) is unchanged, layered underneath the new outer
+        scroll.
+      - mouseScrolled now splits by cursor position: over the enchant
+        list itself → scrolls its own rows (loadoutScroll, unchanged
+        step); anywhere else in the right column (the strip) → scrolls
+        the outer content area, which is what actually gives the list
+        room to exist under a tall strip.
+      - mouseClicked's LOADOUTS_IDX/SKILLS_IDX blocks thread the same
+        scroll offset through every button's stored Y (mirrors render
+        math exactly, this codebase's established pattern — no shared
+        layout system) and added an explicit clip-rect guard
+        (my < clipTop || my >= clipBot → no-op) so a button scrolled
+        above/below the visible viewport can't register a phantom click
+        through the title/hint bars.
+
+Built and deployed (jar copy only, no restart — standing rule): solsai
+1.10.10 → 1.10.11, prizmo-system 0.1.25 → 0.1.27 (0.1.26 had a bug caught
+in review — mouseScrolled's LOADOUTS_IDX/SKILLS_IDX dispatch checked only
+mouseY, so scrolling over the LEFT type-picker column would still move
+the right column's scroll; fixed by gating on mouseX >= rightColX too,
+0.1.27 has the fix). Both compile clean on JDK 21. NOT live-tested —
+punch list for next time: R stops an active
+MG/Burst stream instead of conjuring; Extreme fire-rate/spacing tiers are
+reachable and visibly different from Fast/Wide; toggling circles-
+sequential makes multiple active circles visibly take turns instead of
+firing in parallel; 5/6/7-circle summons place the extras behind the
+player, spaced apart, slowly counter-orbiting, without visually colliding
+with the front 4; the original enchant-list-empties bug is gone in
+Arrow+Circles, and both LOADOUTS and SKILLS tabs scroll instead of
+clipping to zero rows.
+
+────────────────────────────────────────────────────────
+SESSION 41 continued — SPEED REGULATOR (3rd wishlist item)
+────────────────────────────────────────────────────────
+[x] Two independent knobs (user's answer to "speed of what" — both, not
+    one), both default 1.0 (today's exact existing behavior), presets
+    Slow/Normal/Fast (0.5×/1×/2×) matching this codebase's existing
+    preset-button convention rather than a continuous slider:
+      - Fire rate — scales MACHINE_GUN_INTERVAL_TICKS and
+        BARRAGE_SPAWN_INTERVAL_TICKS (divides, so higher multiplier =
+        smaller interval = faster), AND scales conjureOne()'s existing
+        NO_ARROW_HUNGER_CHANCE by the same multiplier (capped at 1.0) —
+        "bigger speed, bigger chance" applies to both the natural
+        more-attempts-per-second effect AND the per-attempt probability
+        itself, per the user's literal words.
+      - Flight speed — scales released arrows' actual travel speed
+        (ARROW_SPEED × multiplier). This needed an entirely NEW cost path:
+        release never cost hunger before (only conjuring did) — added
+        RELEASE_HUNGER_CHANCE_BASE (0.03) × flightSpeedMultiplier, checked
+        once per releaseArrow() call, using the exact same foodLevel>0
+        gating the earlier free-food bugfix established (there's no
+        release-side refund path, so this one has to charge correctly the
+        first time, not rely on a later correction).
+    New endpoints: /arrow-set-fire-rate, /arrow-set-flight-speed (both
+    clamp 0.5-3.0 server-side regardless of what the client sends). UI:
+    two more preset rows in ArrowWheelScreen (grew PANEL_H again, now 294
+    vs. the original 190 — same low-blast-radius reasoning as the rune
+    row, standalone screen, nothing else shares its layout).
+
+Built and deployed (jar copy only, no restart — standing rule): solsai
+1.10.9 → 1.10.10, prizmo-system 0.1.24 → 0.1.25. Both compile clean on JDK
+21. Not live-tested. 3 of 4 wishlist items now built this session (Arrow
+Rain, rune particles, speed regulator) — only "turret moving angle" left,
+still unresolved even for the user ("I'm not sure") — and the
+configurability-suggestions list, which was explicitly just a brainstorm,
+not a commitment.
+
+────────────────────────────────────────────────────────
+SESSION 41 continued — DECORATIVE RUNE PARTICLES REBUILT (2nd wishlist item)
+────────────────────────────────────────────────────────
+[x] Two independent toggles, both off by default: "Spell area" (a slow-
+    rotating ENCHANT particle ring around eye+look*FORWARD_DIST — the same
+    reference point Mage Circle/turret formations use, regardless of which
+    formation is actually active) and "Aureola" (the same ring shape around
+    the player's own body at chest height). ParticleTypes.ENCHANT
+    confirmed as the correct import from this project's own history
+    (session 37's removal notes named both ENCHANT and END_ROD explicitly)
+    — END_ROD stays removed, only ENCHANT came back, per the user's
+    explicit choice. Implementation spawns one particle per enabled ring
+    per tick at an advancing angle (tickRuneEffects() in
+    ArrowManifestManager, wired into the same tick() every other per-player
+    system already runs through) rather than a full ring every tick — over
+    about a second this traces a visible circle, same "individual floating
+    rune" look vanilla's own enchant table ambient effect has, far cheaper
+    than spawning N particles at once. New endpoints:
+    /arrow-set-rune-spell, /arrow-set-rune-aura. UI lives in
+    ArrowWheelScreen (not RED TERMINAL's already-packed Arrow strip) — grew
+    that screen's PANEL_H by 36px for a new toggle row, low-blast-radius
+    since nothing else shares its layout constants.
+
+Built and deployed (jar copy only, no restart — standing rule): solsai
+1.10.8 → 1.10.9, prizmo-system 0.1.23 → 0.1.24. Both compile clean on JDK
+21. Not live-tested.
+
+────────────────────────────────────────────────────────
+SESSION 41 (2026-08-26) — ARROW RAIN: FIRST REAL "SKILL" (VS. PERSISTENT
+FORMATION), NEW SKILLS TAB, WHEEL SKILL-SLOT INFRASTRUCTURE, NEW OWNER-
+IMMUNITY MIXIN
+────────────────────────────────────────────────────────
+Designed collaboratively (Q&A, plan mode) — see
+/home/prizmo/.claude/plans/arrow-barrage-arrows-spawn-joyful-ladybug.md for
+the full writeup and the javap-verified reasoning behind the mixin. First
+item off the standing wishlist from session 40; the rest (particle effect,
+speed regulator, turret angle-tracking, more configurability suggestions)
+are still there, untouched.
+
+[x] `Formation.RAIN` added to ArrowManifestManager.java — behaves unlike
+    the other three (no floating pre-stage, no auto-conjure, no per-tick
+    positioning): `/arrow-shoot` while in this formation calls castRain()
+    instead of releasing floating arrows. castRain() resolves a target
+    center (self position, or eye+look flat projection for "aim" mode —
+    deliberately not a real block raycast, arrows just fall with real
+    gravity from a fixed height and land wherever terrain actually is),
+    charges a hunger cost scaling with count (ceil(count/20)), and arms a
+    staggered spawn queue (one arrow every 2 ticks) drained from tick() —
+    reads as "raining" over a few seconds instead of dumping the whole
+    count at once. 10s cooldown, ticks down regardless of current
+    formation. New PlayerState fields: rainCount (1-500, default 100),
+    rainTargetSelf, rainLifeDrainEnabled, rainCooldownTicks,
+    rainSpawnRemaining/Cooldown, rainCenter.
+
+[x] Real physics, not the floating-noClip trick every other arrow group in
+    this class uses — Rain arrows have gravity ON and noClip OFF from the
+    moment they spawn, so they actually fall and can be dodged (explicit
+    user requirement: "the enemy is allowed to try and dodge the arrows").
+    Short-lived: force-discarded RAIN_ARROW_LIFETIME_TICKS (60 = 3s) after
+    spawning regardless of whether they landed or hit anything — simpler
+    and more robust than detecting "on ground," and keeps concurrent
+    entity count bounded even at rainCount=500 (worst case ≈ spawn-rate ×
+    lifetime, never the full cast count alive at once — this is what
+    protects the FPS/entity-count risk flagged when this was still just a
+    wishlist item).
+
+[x] Resource cost: hunger first (down to 0, using the same foodLevel>0
+    gating the earlier hunger-refund bugfix established), then — only if
+    the player has opted in via RED TERMINAL's life-drain toggle — health,
+    but NEVER past 50% of max health (RAIN_LIFE_HEALTH_FLOOR). Any cost
+    still unpaid after both is simply forgiven; Rain always fires once
+    cast, matching this class's existing "never block the action" cost
+    philosophy (see conjureOne()'s NO_ARROW_HUNGER_CHANCE design).
+
+[x] NEW — RainArrowOwnerImmunityMixin.java (com.zote.contextmod.mixin).
+    Verified via javap against the actual mapped 1.20.1 (Yarn build.10)
+    ProjectileEntity class (not assumed) that vanilla's owner-exclusion is
+    TEMPORARY, not permanent — a leftOwner flag flips true once a
+    projectile is judged to have travelled far enough from its owner's
+    hitbox, after which canHit(Entity) allows the owner again (the
+    well-known "shoot an arrow straight up, it falls back and hits you"
+    vanilla behavior — same mechanism). Rain arrows spawn 15 blocks above
+    the caster, so leftOwner flips almost immediately, meaning a falling
+    Rain arrow absolutely could hit the summoner on the way down under
+    plain vanilla rules — especially in self-target mode, which aims
+    arrows at the caster's own position on purpose. This is the same class
+    of bug already found and fixed once this session for Barrage (a
+    different mechanism — noClip toggling — but the same lesson: verify,
+    don't assume, arrows can't hit their owner). Injects into
+    ProjectileEntity.canHit(Entity) (HEAD, cancellable), forcing false when
+    the checked entity is the arrow's own owner AND the arrow carries the
+    new RAIN_ARROW_TAG — scoped so it never touches any other projectile
+    in the game, including this project's own other arrow groups (which
+    never target their owner's position anyway). require=0 in
+    solsai.mixins.json, matching EnchantmentHelperMixin's own documented
+    reasoning in that same file: an unresolved mixin target fails the
+    WHOLE mod's load under this project's defaultRequire=1, too large a
+    blast radius for one safety mixin on a live server. **If this doesn't
+    resolve, the log will show a conflict/0-targets warning for
+    RainArrowOwnerImmunityMixin specifically after a restart — check for
+    that BEFORE trusting self-target mode is actually safe.**
+
+[x] NEW SKILLS tab in RED TERMINAL (idx 7, appended after LOADOUTS, same
+    "don't renumber existing tabs" pattern used when LOADOUTS itself was
+    added). Master-detail like LOADOUTS: left column of skill names
+    (SKILL_NAMES = {"arrow_rain"} — extensible, a second skill later is a
+    one-line addition + a render/click branch), right side shows the
+    selected skill's controls. Arrow Rain's: count stepper (±25, 1-500),
+    Self/Aim target toggle, life-drain on/off toggle, cooldown status line,
+    Cast button (sets formation=rain then fires /arrow-shoot — works
+    without needing Rain formation pre-selected elsewhere), and an "Assign
+    to Wheel" button.
+
+[x] NEW — "equipped skill" infrastructure, minimal but real (not
+    hardcoded), per the user's explicit ask ("a button to replace and fit
+    skills in the rolling circular panel"). New
+    ArrowManifestManager.equippedSkill map (player -> skill name string,
+    default "arrow_rain"), new `/skill-equip` endpoint, "Assign to Wheel"
+    in the SKILLS tab writes to it. MasterWheelScreen gets a 4th wedge,
+    "Skill," that casts whichever skill is currently equipped — for now
+    (one skill) this always means Rain, but the shape is generic so a
+    second skill is a registry addition later, not a rearchitecture.
+
+[x] New endpoints: /arrow-set-rain-count, /arrow-set-rain-target,
+    /arrow-set-rain-lifedrain, /skill-equip. /arrow-set-formation already
+    supports formation=rain with no ContextMod.java change needed (its
+    existing uppercase-and-valueOf path just works). /arrow-state now also
+    returns rainCount/rainTarget/rainLifeDrain/rainCooldownTicks/
+    equippedSkill.
+
+Built and deployed (jar copy only, no restart — standing rule): solsai
+1.10.7 → 1.10.8, prizmo-system 0.1.22 → 0.1.23. Both `./gradlew
+compileJava`/`build` clean on JDK 21. IMPORTANT: unlike a plain Java logic
+change, mixins only apply at classload — NOTHING about Rain (least of all
+whether the owner-immunity mixin actually resolved) can be verified until
+the server actually restarts, not just until the jar is swapped on disk.
+Next session: restart (with permission), then check the log for a
+RainArrowOwnerImmunityMixin conflict warning FIRST, before any gameplay
+testing — if that mixin silently no-op'd, self-target Rain casts could
+genuinely hurt the caster, which is exactly the failure mode this session
+was trying to close off.
+
+────────────────────────────────────────────────────────
+SESSION 40 continued — SHIELD FACING/ROLL FIXES RECONFIRMED LIVE; SINGLE-
+DOME-SHIELD CENTERING FIX; SHIELDS+FOCUS TABS FOLDED INTO LOADOUTS>SHIELD;
+2 STALE CHECKLIST ENTRIES REMOVED
+────────────────────────────────────────────────────────
+[x] Live-tested: both REOPENED shield bugs (facing backward, spinning/
+    rolling) are confirmed fixed. No code changes needed — see the
+    reconfirmation notes where those entries used to be flagged REOPENED.
+
+[x] BUG FIX — single dome shield not centered on aim. fibPoint(0, 1, ...)
+    placed a lone dome shield at the equator, orbiting independently via
+    globalAngle — never actually tracking where the player looks (dome
+    mode isn't aim-tracking for N>1 either, a full shell doesn't have one
+    "front", but N==1 has an obvious expected front). FOCUS mode's
+    positionDistributed() already centers N==1 exactly on focusDir
+    (verified by trace, not buggy) — this was dome-mode-only, which is also
+    the default mode, hence "same behavior in all of them" reading as
+    universal. Special-cased total==1 in tick()'s dome branch to sit at
+    eye + look*ORBIT_RADIUS instead, same eye-origin convention FOCUS mode
+    already uses.
+
+[x] UI — SHIELDS and FOCUS tabs folded into LOADOUTS>Shield (user's ask,
+    same consolidation Arrow's formation/fire-mode controls already got).
+    Migrated content (status/refresh, batch stepper, summon/dismiss
+    buttons, Shield Wheel button) into new renderShieldModeStrip(), careful
+    to size every button off the passed-in panel width instead of the old
+    full-PANEL_W math — that mismatch is exactly what would have caused
+    the "colliding buttons" the user flagged when moved into the narrower
+    Loadouts right-panel. Tab count 9 → 7 (SUMMON/CLONES/ENCHANTS/EFFECTS/
+    BODY/BOTS/LOADOUTS); all tab-index constants and every dispatch keyed
+    on them (render/hint/click/scroll) updated accordingly. SUMMON tab's
+    own shield buttons (Shield Dome/+1/xShields/Split) were NOT touched —
+    not what was asked, and Arrow already has the same light redundancy
+    between SUMMON's basic buttons and Loadouts' fuller controls.
+
+[x] Removed 2 demonstrably stale entries per user request: "Solsai is
+    STILL not deployed" and "Apollo is missing a working JDK" — both false
+    as of this session (solsai's been building/deploying on Apollo with
+    JDK 21 all day).
+
+Built and deployed (jar copy only, no restart/relaunch — standing rule):
+solsai 1.10.6 → 1.10.7, prizmo-system 0.1.21 → 0.1.22. Both
+`./gradlew compileJava`/`build` clean on JDK 21. The single-dome-shield fix
+and the tab restructuring are NOT yet live-tested — next session should
+confirm a lone dome shield actually sits toward the aim now, and that the
+new LOADOUTS>Shield layout doesn't have any button overlap after all
+(reasoned through the geometry carefully, but "no button collides" hasn't
+been visually confirmed in-game yet).
+
+────────────────────────────────────────────────────────
+SESSION 40 continued — FREE-FOOD BUG IN ARROW HUNGER REFUND (found via user
+report + code trace, not guessed)
+────────────────────────────────────────────────────────
+User: "I feel like I get less hungry the more I summon and dismiss." Asked
+first whether real arrows were in inventory during the test (they weren't —
+confirms every conjure went through the no-arrow hunger-chance path), then
+traced both refund paths (arrows + shields) rather than guess a fix blind.
+
+[x] BUG FIX — conjureOne()'s 5%-chance hunger charge called
+    `hunger.setFoodLevel(Math.max(0, foodLevel - 1))` and set
+    `chargedHunger = true` UNCONDITIONALLY. At foodLevel == 0 that call is a
+    clamped no-op — nothing is actually paid — but the arrow still got
+    tracked as hunger-funded. Dismissing it later still refunded a genuine
+    +1 (no clamp stops an increase from 0), handing back a real food point
+    for a cost that was never actually charged. Gets worse the longer a
+    summon/dismiss test session runs, since repeated cycling naturally
+    drives hunger down toward 0 first — exactly where the bug kicks in —
+    matching the user's exact report. Confirmed shields are NOT affected by
+    this class of bug: their refund only ever touches `exhaustion` (never
+    `setFoodLevel` directly), and exhaustion has no mechanism to grant food
+    when reduced — at worst it under-refunds, never over-refunds.
+    Fix: gate the charge on `foodLevel > 0` BEFORE clamping, so
+    `chargedHunger` only ever becomes true when a real point was paid —
+    "funded" now means what it says.
+
+Built and deployed (jar copy only, no restart — standing rule): solsai
+1.10.5 → 1.10.6. `./gradlew compileJava`/`build` clean on JDK 21. Not yet
+live-tested — verify next session: repeatedly summon-with-no-real-arrows
+and dismiss at LOW hunger specifically (the bug only shows there) and
+confirm food no longer creeps upward.
+
+────────────────────────────────────────────────────────
+SESSION 40 continued — FIRST LIVE-TEST FEEDBACK ON THE ARROW SYSTEM: TWO
+CONFIRMED BUGS FIXED, CIRCLE POSITIONING REWORKED, SINGLE SHOT MODE ADDED,
+CONFIGURABLE SPACING/SLOTS IN RED TERMINAL — PLUS A STANDING WISHLIST SECTION
+────────────────────────────────────────────────────────
+User's first live test of session 40's arrow formation/fire-mode system
+turned up a real safety bug, a real "can't stop it" bug, several positioning
+complaints, and a pile of bigger feature ideas. Planned collaboratively
+(Q&A, plan mode) — see /home/prizmo/.claude/plans/arrow-barrage-arrows-spawn-joyful-ladybug.md.
+Scope for THIS pass, per user's own choice: fix the 2 bugs + concrete
+tuning; log everything bigger as its own standing wishlist (below) rather
+than guess specs no one's confirmed yet.
+
+[x] BUG FIX — dismiss didn't actually stop Barrage/Circles auto-spawn.
+    Root cause, traced (not guessed): dismiss() cleared the current arrows
+    but never touched PlayerState.formation, so autoConjure() — driven
+    purely by "formation != MAGE_CIRCLE" — refilled the group again on the
+    very next timer tick, same as if dismiss never ran. User's repro
+    matched exactly ("most of the time it fails to stop it" — because
+    within ~4 ticks the arrows were visibly back). Fixed: new
+    PlayerState.autoSpawnPaused, set true by dismiss(), checked by
+    autoConjure(), cleared by any explicit "give me more" action
+    (manifest/manifestBurst/setFormation/setFireMode).
+
+[x] BUG FIX — Barrage arrows killed the player on release. Confirmed live,
+    at the moment of firing (not while floating). Root cause: Barrage
+    arrows sit BEHIND the player; releaseArrow() re-enables collision
+    (setNoClip(false)) and gives forward velocity in the same instant, so
+    the arrow's flight path necessarily passed back through the player's
+    own hitbox — Mage Circle/Circles arrows never had this because they're
+    always positioned in FRONT. Fixed: releaseArrow() now snaps every
+    arrow to a safe muzzle point (eye + look*0.5) before re-enabling
+    collision, applied unconditionally (harmless one-frame jump for
+    formations already in front, closes the same risk for any future one).
+
+[x] Fast-fire "spin-up" visual glitch (Machine Gun + Barrage/Circles) —
+    diagnosis: not formation-math lag (positions are recomputed fresh every
+    tick, no server-side catch-up), but standard Minecraft client entity
+    interpolation — arrows used to always spawn at eye and only reach their
+    real slot on the NEXT tick, so a near-instant Machine Gun release could
+    fire before the client's smoothing finished. Fixed: conjureOne() now
+    computes the real intended position (Barrage's random offset / Circles'
+    slot center) and spawns there directly for those two formations. Mage
+    Circle untouched (manual conjure only, never flagged as having this).
+
+[x] Circle formation positioning reworked. Was: fixed 4-slot list
+    (top-right→top-left→bottom-right→bottom-left), so 1 circle sat at
+    top-right and 2 circles both sat in the "top" row. Now, Slot enum
+    expanded with CENTER/LEFT/RIGHT (no vertical shift) and per-count
+    DEFAULT layouts: 1→CENTER, 2→LEFT+RIGHT (vertically centered), 3→
+    LEFT+CENTER+RIGHT (one dead-centered on the aim, per user's ask), 4→
+    unchanged 4-corner layout (never flagged as wrong). ALSO added a
+    per-circle-index override on top of the defaults (explicit user ask:
+    "configurable... whether upper right or center") — new endpoint
+    /arrow-set-circle-slot, RED TERMINAL LOADOUTS>Arrow gets a click-to-
+    cycle button per active circle (cycles CENTER→LEFT→RIGHT→TOP_RIGHT→
+    TOP_LEFT→BOTTOM_RIGHT→BOTTOM_LEFT→...) — a dropdown of all 7 didn't fit
+    the panel width, cycling was the compact alternative.
+
+[x] Mage Circle spacing — RADIUS_STEP 0.10 → 0.28 (user: "too much
+    together... hard to tell there are circles there"). Single-constant
+    tuning change, cheap to revisit if 0.28 isn't right either — user can
+    eyeball it live and ask for a different number.
+
+[x] Single Shot fire mode added (was missing) — FireMode.SINGLE, releases
+    just the oldest arrow per relevant group, once. In the fire-mode
+    button row everywhere Shotgun/Burst/Machine Gun already are
+    (ArrowWheelScreen, RED TERMINAL's arrow strip, /arrow-set-firemode?mode=single).
+
+[x] Barrage spacing — configurable (explicit ask) + defaults widened.
+    New SpreadPreset enum (CLOSE/NORMAL/WIDE) replacing the old fixed
+    BARRAGE_BEHIND_MIN/MAX/SPREAD_H/V constants; NORMAL itself is wider
+    than the old always-on defaults (behind-distance 1.0-2.5 → 2.0-4.0).
+    New endpoint /arrow-set-barrage-spread, RED TERMINAL LOADOUTS>Arrow
+    gets Close/Normal/Wide buttons (BARRAGE formation only).
+
+[x] RED TERMINAL LOADOUTS — added "sword" to LOADOUT_TYPES (shows a plain
+    "[Work in Progress]" message, no enchant list — it doesn't exist yet).
+    Shield's tab, reported as "quite empty," now shows an explicit note
+    that it's not wired to shield behavior yet, instead of silently doing
+    nothing — actually wiring shields to consume an enchant set is still
+    out of scope (no shield mechanic change was asked for beyond hunger
+    refund, already shipped).
+
+Built and deployed (jar copy only, no restart/relaunch — standing rule):
+solsai 1.10.4 → 1.10.5, prizmo-system 0.1.20 → 0.1.21. Both
+`./gradlew compileJava`/`build` clean on JDK 21. NONE of this has been
+live-tested yet — same as session 40's original batch, this needs an
+actual play session before trusting any of it, especially the two bug
+fixes (that's the whole point of them).
+
+Direct answer to a question asked mid-session: yes, the hunger-speed
+debuff IS implemented (buildFireContext(): ARROW_SPEED × 0.2 when food is
+empty) — this was never disputed as broken, just never live-confirmed
+either. Worth an explicit check next test pass, not a code change.
+
+────────────────────────────────────────────────────────
+ARROW SYSTEM — STANDING WISHLIST (not built, tracked per user's explicit
+request: "it's a developer tool... keep track of this on agent to not
+forget"). Pull items from here into a real session plan when picked up —
+don't implement straight off this list without re-confirming scope, several
+have open sub-questions the user hasn't answered yet.
+────────────────────────────────────────────────────────
+
+[x] IMPLEMENTED (not yet live-tested — needs a restart, see session note
+    below) — Arrow Rain skill. Full design + build this session, see
+    "SESSION 41" below. Was the wishlist's first item; moved out of this
+    list since it's built now, not just planned.
+
+[x] IMPLEMENTED (not yet live-tested) — decorative rune particle effect.
+    Open questions resolved: ENCHANT only (END_ROD stays removed), off by
+    default, both forms as independent toggles. See SESSION 41 continued
+    below for the build.
+
+[x] IMPLEMENTED (not yet live-tested) — speed regulator. Resolved as BOTH
+    knobs, independently configurable (user's answer). See SESSION 41
+    continued below for the build.
+
+[x] Turret "moving angle on their own axis" — RESOLVED via direct follow-up
+    question (of the 3 logged candidates, user confirmed (a): "turret with
+    rotational inertia" — MAGE_CIRCLE/CIRCLES formations currently snap
+    their position to the player's live look direction every single tick
+    (confirmed via code read: turretSlotCenter()/positionMageCircle() both
+    called player.getRotationVector()/getEyePos() fresh every tick, zero
+    smoothing anywhere in the file). Implemented: PlayerState gained
+    turretYaw/turretPitch/turretAngleInit (one shared eased angle per
+    player — every turret/slot/ring they have already derives from the
+    same look direction each tick, so no per-group state needed). New
+    updateTurretAngle() (called once per player per tick from
+    positionGroups(), unconditionally regardless of active formation, so
+    the eased angle never goes stale during Barrage/Rain and doesn't
+    catch-up-sweep when switching into Circles) advances toward the
+    player's real live yaw/pitch capped at TURRET_TURN_RATE_DEG=8.0/tick
+    (~160°/sec, hardcoded like the sibling ROTATION_SPEED/
+    BACK_RING_ORBIT_SPEED constants — not RED-TERMINAL-configurable this
+    pass), using MathHelper.wrapDegrees()/clamp() for correct ±180° yaw
+    wraparound. New smoothedLookVec() reconstructs a look vector from the
+    eased angle via Vec3d.fromPolar() — verified via javap + a bytecode-
+    level numeric comparison across 7 test angles that this is bit-for-bit
+    identical to Entity.getRotationVector()'s own internal formula (not
+    assumed from the method name) before trusting it. turretSlotCenter()/
+    backRingSlotCenter()/groupCenter() now take the eased look/yaw as
+    explicit parameters instead of re-deriving from the player internally.
+    conjureOne()'s CIRCLES pre-spawn positioning uses the same eased value
+    (via a new ensureTurretAngleInit() guard, needed because a player's
+    very first-ever conjure can fire before tick() has run even once for
+    their brand-new PlayerState). BARRAGE is intentionally excluded (not
+    "aiming," a different positioning purpose) — the orbital arrow-spin
+    rotations (ROTATION_SPEED/BACK_RING_ORBIT_SPEED) are untouched, this
+    only changes where that spin's center sits. Built and deployed (jar
+    copy only, no restart): solsai 1.10.11 → 1.10.12, compiles clean on
+    JDK 21. NOT live-tested — punch list: turning the camera while Mage
+    Circle/Circles is active should visibly swing the formation toward
+    the new facing over about a second instead of teleporting; individual
+    arrows' own orbital spin should look unchanged; the 5-7 circle back
+    ring should ease the same way; switching from Barrage/Rain into
+    Circles shouldn't produce a stale-angle catch-up snap.
+
+[ ] Additional configurability suggestions (this session's own brainstorm,
+    per the user's ask to suggest things they forgot — none of this is
+    committed, just candidate knobs for a future config pass):
+      - Base arrow damage / flight speed / formation spin speed as
+        RED-TERMINAL-adjustable presets, not just source constants.
+      - MAX_ARROWS / CIRCLE_MAX_ARROWS caps themselves configurable (trade
+        FPS/entity-count risk for capacity, player's own call).
+      - Turret ring radius/size independently adjustable from its slot
+        offset.
+      - An idle auto-despawn timer for manifested-but-forgotten arrows
+        (right now they sit forever until fired/dismissed/orphan-swept).
+      - A blanket "never damage self" safety toggle, independent of the
+        release-time muzzle-snap fix above — belt-and-suspenders for any
+        future formation that might reintroduce a similar risk.
+      - Audio feedback on conjure/fire (currently silent).
+      - Named presets — save a full formation + fire mode + enchant
+        loadout as one recallable preset instead of re-picking every piece
+        each session.
+      - An always-visible small HUD readout of current formation/fire-
+        mode/circle-count, visible without opening RED TERMINAL or a wheel.
+
+────────────────────────────────────────────────────────
+SESSION 40 continued — TWO SHIELD-ORIENTATION FIXES BACKFILLED AS THEIR OWN
+ENTRIES (existed only as inline code comments, never logged here); USER
+REPORTS BOTH ARE NOT ACTUALLY WORKING LIVE — REOPENED, NOT CONFIRMED FIXED
+────────────────────────────────────────────────────────
+User asked whether a past shield-positioning correction was missing after
+today's earlier solsai/prizmo-system work. Checked directly: the code is
+present, and confirmed byte-for-byte identical between Apollo and NOX via a
+full diff of ShieldManifestManager.java (the only differences found were
+today's brand-new hunger-refund code, Apollo-only so far, unrelated). So
+nothing was lost in past reconciliation merges — but neither fix had ever
+been given its own CHECKLIST entry, only an inline code comment, which is
+presumably why it read as "missing." Logging both now. User then reported
+both "seem to not have been effective" — i.e. still visibly wrong in-game
+despite the code being there — so both are marked [ ] REOPENED below, not
+[x]. Root cause of why the shipped fix isn't holding up live has NOT been
+investigated yet — no guessing without first seeing what's actually
+happening in-game (screenshot/description) or console output.
+
+[x] RECONFIRMED FIXED (2026-08-25 live test) — Shield facing backward.
+    SHIELD_MODEL_FRONT = (0,0,-1) is correct; user confirmed the decorated
+    face no longer points at the player. Same live test flagged a
+    different, real issue instead — see "single shield not centered on aim"
+    below.
+
+[x] RECONFIRMED FIXED (2026-08-25 live test) — Shield spinning/rolling.
+    User confirmed: "doesn't roll anymore." The WORLD_UP-anchored
+    orthonormal-basis fix in applyShieldTransform() holds up live.
+
+────────────────────────────────────────────────────────
+SESSION 40 (2026-08-25) — PRIZMO HUD (PLAYER'S OWN COMBAT TOOLKIT, SEPARATE
+FROM NILO): PER-SUMMON-TYPE ENCHANT LOADOUTS, ARROW FORMATION × FIRE-MODE
+MATRIX, HUNGER REFUND ON DISMISS, MASTER RADIAL WHEEL — SOLSAI/PRIZMO-SYSTEM
+────────────────────────────────────────────────────────
+Note: this is all solsai (`/home/prizmo/solsai`) + prizmo-system
+(`/home/prizmo/prizmo-system`) work — the player's OWN magic/combat HUD, not
+Nilo the bot. Planned collaboratively with the user (Q&A, plan mode) before
+any code — see /home/prizmo/.claude/plans/arrow-barrage-arrows-spawn-joyful-ladybug.md
+for the full design writeup and reasoning.
+
+[x] SummonEnchantTracker.java (solsai, new) — per-player, per-summon-type
+    enchant loadouts (Map<UUID, Map<String,Set<Identifier>>>), keyed by an
+    extensible String type ("arrow", "shield", future "sword" needs no code
+    change here). Separate from the existing global EnchantTracker (player's
+    passive real-combat buffs, RED TERMINAL's original ENCHANTS tab) — that
+    one is untouched. New endpoints: /summon-enchant-toggle,
+    /summon-enchant-list, /summon-enchant-clear (all take &type=).
+    ArrowManifestManager's damage/flame/punch/piercing checks now read from
+    this instead of the global tracker.
+
+[x] ArrowManifestManager.java (solsai) — REWRITTEN to add two independent,
+    freely-combinable axes instead of one fixed formation+behavior:
+      FORMATIONS: Mage Circle (today's original front-of-player round/plus/
+        x-cross formation, unchanged, manual conjure only) · Barrage (new —
+        auto-conjures continuously at random positions behind the player,
+        rides along as they turn) · Circles ×1-4 (new — N independent
+        turrets at fixed quadrant slots — top-right/top-left/bottom-right/
+        bottom-left, in that activation order — each with its OWN cap
+        (CIRCLE_MAX_ARROWS=30, independent of shared MAX_ARROWS=120) and
+        own auto-conjure).
+      FIRE MODES: Shotgun (today's original — release everything at once,
+        unchanged) · Burst (new — 3 oldest arrows, ~2 ticks apart, one
+        pulse per trigger) · Machine Gun (new — continuous 1-every-4-ticks
+        release, deliberately does NOT stop when a group empties, so it
+        resumes on its own as Barrage/Circles keep feeding it — the actual
+        "arrow barrage" feel the user asked for).
+      For CIRCLES formation specifically, every fire mode runs PER-CIRCLE
+      (confirmed with user) — Circles+Shotgun = each turret empties in one
+      simultaneous shot; Circles+Burst = each fires 3 of its own; Circles+
+      MachineGun = N independent parallel machine-gun streams.
+    New endpoints: /arrow-set-formation (formation=magecircle|barrage|
+    circles&count=1-4), /arrow-set-firemode (mode=shotgun|burst|machinegun).
+    /arrow-shoot now dispatches per current fire mode instead of always
+    shotgun-all. State defaults to Mage Circle + Shotgun (today's exact
+    original behavior) so a player who never touches the new controls sees
+    no change.
+    Naming note, flagged for the user to confirm: "circle-cross" in the
+    user's own wording is assumed to mean today's existing Mage Circle
+    formation (already has PLUS/X-CROSS shapes) — inferred, not stated
+    outright.
+
+[x] Hunger refund on dismiss (arrows + shields) — only for arrows/shields
+    that were ACTUALLY hunger-funded (arrows: the 5% no-physical-arrow
+    chance genuinely fired, not just "no arrow available" 95% of which
+    costs nothing; shields: spawned via the addExhaustion(3.0f) fallback,
+    no real shield in inventory) AND never fired/still present at dismiss
+    time. Arrows track this per-arrow-UUID (hungerFundedArrows map, cleared
+    without refund the instant an arrow actually releases via any fire
+    mode). Shields track it per-ShieldInstance (new hungerCost boolean),
+    refunded via addExhaustion(-3.0f) in both dismissAll() and dismissSome()
+    (partial/split dismiss only refunds what's actually being removed).
+
+[x] MasterWheelScreen.java (prizmo-system, new) — hub radial wheel, same
+    aim-and-release/click mechanics as the existing ShieldWheelScreen.
+    Wedges: Shield (opens the EXISTING ShieldWheelScreen unchanged, not
+    duplicated), Arrow (opens new ArrowWheelScreen), Sword ("[Work in
+    progress]" label, inert wedge — per user's explicit ask to leave it
+    present but empty). New keybind key.hudlink.masterwheel, unbound by
+    default (this codebase's convention — no guessed key). Existing F
+    (shieldWheelKey) untouched — the hub is an additional entry point, not
+    a replacement.
+
+[x] ArrowWheelScreen.java (prizmo-system, new) — formation + fire-mode
+    picker reached from the hub's Arrow wedge. Two independent picks, so
+    (unlike the single-pick wheels) clicking a button fires that one
+    selection immediately and keeps the screen open rather than closing —
+    implemented as two button columns (FIRE MODE / FORMATION) rather than
+    pie wedges, a two-axis pick not fitting one ring cleanly. Circles is 4
+    separate buttons (×1/×2/×3/×4) rather than a button + count stepper,
+    keeping every button a single immediate action.
+
+[x] CommandPanelScreen.java (RED TERMINAL, V key) — new LOADOUTS tab
+    (idx 8, appended after BOTS so no existing tab index shifted): left
+    column of summon-type buttons (LOADOUT_TYPES = {"arrow","shield"},
+    appending a future type is a one-line change), right side shows that
+    type's enchant checklist (shares the ENCHANTS tab's registry scan, only
+    the active-set source differs — /summon-enchant-* instead of
+    /enchant-*). When "arrow" is selected, a compact fire-mode/formation
+    button strip renders above the list, mirroring ArrowWheelScreen exactly
+    so the wheel and RED TERMINAL manage the identical state (per user:
+    "modes should be managed by the main radial wheel and the red
+    terminal"). Known gap, stated openly rather than silently faked:
+    shield's loadout list is toggleable but ShieldManifestManager doesn't
+    consume any enchant set yet (shields are cosmetic doubles of the real
+    equipped shield's real NBT) — out of THIS session's scope, no shield
+    mechanic change was asked for beyond the hunger refund above.
+    Cosmetic risk, not yet visually confirmed: 9 tabs now (was 8) at the
+    existing PANEL_W=340 — "LOADOUTS" is the same length as "ENCHANTS" so
+    should still fit the tab bar's per-tab width, but this was reasoned
+    from the numbers, not screenshotted.
+
+[x] Known limitation, stated up front rather than glossed over: per-type
+    enchant LISTING covers every registered enchant including modded ones
+    (same registry scan as before), but actual gameplay EFFECT stays
+    limited to whichever specific enchant IDs ArrowManifestManager hand-
+    checks (Power/Punch/Piercing/Flame) — there's no generic way to make an
+    arbitrary modded arrow enchant "just work" on a hand-spawned
+    ArrowEntity that never goes through vanilla's real shoot pipeline.
+
+Built and deployed (jar copy only, no restart/relaunch — standing rule):
+solsai mod_version 1.10.4 → /home/prizmo/mc-prominence2/data/mods/ (old
+1.10.2 backed up); prizmo-system mod_version 0.1.19 → 0.1.20 → ATLauncher
+mods folder (old 0.1.19 backed up). Both `./gradlew compileJava`/`build`
+clean on JDK 21. NONE of this has been live-tested — server not restarted,
+client not relaunched, entirely new gameplay code (formations, fire-mode
+timers, turret math, hunger refund, 3 new screens) with zero in-game
+confirmation yet. Next session should live-test before touching anything
+else here.
+
+────────────────────────────────────────────────────────
+SESSION 39 (2026-08-25) — THIRD SOURCE OF "REACTS ON HIS OWN WHILE
+POSSESSED" FOUND (BOW MODE); IN-SCREEN INVENTORY OVERLAY FOR POSSESSION
+────────────────────────────────────────────────────────
+User theory: explore mode and mob-reaction were still fighting possession,
+and opening inventory while possessed was kicking them back to their own
+player. Investigated all three against source, not guesses.
+
+[x] "Reacts on his own to mobs" — root cause found: combat.js's startAttack
+    and startAssist both go through the shared combatTick() (guarded since
+    session 38), but startBowMode() (combat.js ~443-515) never calls
+    combatTick() at all — it has its OWN independent hostile-scan/kite/
+    shoot setInterval, so if bow mode was active when possession started it
+    kept auto-detecting and shooting mobs the whole time, fighting the
+    possessing player's aim. Added the same `if (state.possessed) return;`
+    guard at the top of that interval. combat.js not yet redeployed —
+    Node.js, needs a nilo.service restart on Apollo to load, NOT done this
+    session (standing rule: ask before restarting a live service).
+
+[x] "Explore mode interferes" — checked, already correctly gated since
+    session 38 (monitor.js:148, `if (state.possessed) return;` in
+    startAutonomousBehaviors). If still seen live, most likely it was
+    actually bow mode's pathfinder.setGoal() kiting calls above, not
+    exploration — session 38's fix was also never live-tested before now.
+    Flagged monitor.js's startSkillAutonomyTicker (skill-engine autonomy,
+    ~line 256) as a smaller, lower-probability same-class gap — no
+    possessed guard either, though it only fires if a goal is queued AND
+    10+ min since the last CHAT command (remote-control input doesn't
+    update lastInteractionTime) — not fixed this session, user chose to
+    fix bow mode only for now.
+
+[x] "Opening inventory ends possession" — confirmed NOT a bug: prizmo-
+    system's BotSneakScreen.java's old E-key handler deliberately called
+    /open-bot-inventory, a REAL vanilla container screen (GenericContainer-
+    ScreenHandler via ServerPlayerEntity.openHandledScreen()) — Minecraft's
+    protocol unconditionally swaps the client's screen when that packet
+    arrives, so there was no way to keep both up with that approach. User
+    needs inventory control WHILE possessed (Nilo often far away, walking
+    back isn't practical) so this was changed rather than left as-is.
+
+[x] NEW: in-screen inventory overlay for possession mode. E now toggles an
+    overlay drawn INSIDE BotSneakScreen itself (not a new Screen), driven
+    by Solsai's existing /bot-inventory (already polled into BotTracker's
+    cache every 2s) and /item-move (slot rearrange/merge/swap) — no Solsai
+    changes needed, both endpoints already existed for the old pre-vanilla-
+    screen BotInventoryScreen this replaces (again, differently this time).
+    Since it's never a real screen swap, WASD/mouse/camera possession
+    control keeps running underneath it — movement keys stop responding
+    while it's open (matches vanilla: can't walk with an inventory open)
+    but you're still possessing Nilo, not kicked back to your own player.
+    Click-to-pick-up-then-click-to-place (old removed BotInventoryScreen's
+    model): click an occupied slot to select it (highlighted), click any
+    other slot to move it there (server merges same-item stacks, swaps
+    otherwise), click the selected slot again to cancel. Cursor switches
+    from BotSneakScreen's normal locked/relative look mode to a free
+    pointer while open (needed to actually click slots), back to locked on
+    close — reset via GLFW_CURSOR_NORMAL/DISABLED, prevMX/prevMY cleared on
+    each transition so no camera snap. ESC closes the overlay first if
+    open, only exits possession on a second press.
+    Scope, per user's choice: Nilo's own inventory only, no transfer to/
+    from the possessing player's own inventory (bigger two-grid UI,
+    explicitly deferred).
+    SolsaiClient.java: extracted pollSolsaiInventory()'s per-bot fetch into
+    a reusable refreshInventory(botName), added moveItem(botName, from, to)
+    — runs /item-move then refreshInventory() on one background thread;
+    /item-move already blocks server-side until the move completes, so the
+    ordering is correct with no added delay.
+    Built (mod_version 0.1.18 → 0.1.19), old jar backed up, new jar
+    deployed to the ATLauncher mods folder. Needs a full client relaunch —
+    NOT yet done, NOT yet live-tested.
+
+────────────────────────────────────────────────────────
+SESSION 38 (2026-08-24, same day, continued) — SECOND+THIRD SOURCES OF
+"NILO MOVES BY HIMSELF WHILE POSSESSED" FOUND AND GATED; PLACE-BLOCK BUG
+STILL UNRESOLVED, TWO STRONG CANDIDATES RULED OUT WITH EVIDENCE
+────────────────────────────────────────────────────────
+User reported 3 things while possessing Nilo: can't equip inventory items,
+can't place blocks, still moves on his own.
+
+[x] "Still moves on his own", take two — session 34's state.possessed guard
+    only covered monitor.js's two setInterval loops. Found and gated two
+    MORE independent autonomous-movement sources that weren't touched by
+    that fix:
+      - combat.js's combatTick() — the actual combat engine (pathfinder
+        goals + lookAt + attacks), called on its own schedule regardless of
+        possession. Added `if (state.possessed) return false;` at the top.
+      - nilo.js's bot.on('entityHurt', ...) — a REACTIVE handler (fires on
+        taking damage), architecturally separate from monitor.js's
+        intervals, so it was never covered by session 34's fix at all. Left
+        unguarded, getting hit while possessed would equip gear, raise
+        shield, and bot.lookAt() the attacker — actively fighting the
+        possessing player's own camera control. Added the same guard.
+    Restarted nilo.service on Apollo (the currently-live instance — NOX
+    still unreachable, unchanged) to load both. Not yet re-tested live.
+
+[ ] "Can't place blocks" — investigated two concrete hypotheses, both
+    RULED OUT with hard evidence (not guessed):
+      1. FACE_VECTORS[target.face] index order — verified directly against
+         prismarine-world's actual BlockFace enum
+         (node_modules/prismarine-world/src/iterators.js: BOTTOM=0,TOP=1,
+         NORTH=2,SOUTH=3,WEST=4,EAST=5) — matches the array exactly, not
+         the bug.
+      2. Stale bot.entity.yaw/pitch at raycast time (theory: bot.look()'s
+         force=false path might not update entity.yaw/pitch synchronously,
+         so blockAtCursor() right after would raycast in a stale
+         direction) — read mineflayer's actual bot.look() implementation
+         (node_modules/mineflayer/lib/plugins/physics.js:329-355):
+         bot.entity.yaw/pitch update SYNCHRONOUSLY (lines 345-346) BEFORE
+         the force check — ruled out.
+    One thing surfaced but not chased further: bot.look() quantizes yaw/
+    pitch changes to whole multiples of a fixed "sensitivity" step (anti-
+    cheat mimicry, same file ~line 337-343) and does nothing at all if the
+    quantized change rounds to zero — small, frequent deltas (our 100ms
+    poll sends whatever the mouse moved that tick) could round-to-zero
+    often. Unconfirmed whether this actually explains the placement
+    failures or is a red herring — flagged, not chased, no live
+    console/error output available to confirm either way.
+    User's follow-up answer resolved this AND the equip complaint as the
+    SAME bug: "he dont equip the block that i put at position 2, even after
+    pressing 2" — confirmed "can't equip" = the 1-9 number keys not
+    working, and confirmed "can't place blocks" was downstream of that
+    (Nilo was never actually holding the intended block, so of course
+    nothing useful got placed — the raycast/placeBlock code itself was
+    never the problem).
+
+[x] ROOT CAUSE FOUND — heldSlot was a true one-shot on BOTH sides: client
+    (BotSneakScreen.sendControl()) sent it exactly once then immediately
+    reset to -1; server (remote-control.js) read it via a SEPARATELY
+    clocked 100ms poll with no phase synchronization to the client's own
+    100ms send timer. A one-shot value read by an unsynchronized poller has
+    only a narrow, unguaranteed window of overlap — if the server's poll
+    landed just outside it, the slot change was silently dropped and NEVER
+    observed at all. This is architecturally different from attack/use,
+    which stay true across multiple polls until released and so can't be
+    missed this way — heldSlot was the one control value in this whole
+    system that could vanish without a trace.
+    FIX: BotSneakScreen.java — new setHeldSlot(int) helper sets
+    heldSlotRepeatsLeft = HELD_SLOT_REPEATS (5), and sendControl() now
+    resends the pending slot for up to 5 consecutive ticks (~500ms) instead
+    of resetting after one send. Gives the server's independently-clocked
+    poll several separate chances to catch it — would need to miss 5 in a
+    row on matched 100ms periods, effectively never. Confirmed resending
+    the same slot repeatedly is harmless server-side (bot.setQuickBarSlot
+    is idempotent, remote-control.js already called it unconditionally
+    whenever heldSlot was in 0-8).
+    Built, deployed to the ATLauncher client mods folder (old jar backed
+    up). Needs a full client relaunch to load. Not yet re-tested.
+
+────────────────────────────────────────────────────────
+SESSION 37 continued — SAME-SESSION FOLLOW-UP: RING COLLAPSES TO A LINE
+WHEN LOOKING STRAIGHT UP
+────────────────────────────────────────────────────────
+[x] BUG — reported immediately after the ring redesign above: looking
+    straight up turned the arrow ring into a flat line. Root cause: the
+    ring's plane was built from yaw alone (right × world-up), a DELIBERATE
+    choice (see the old docstring) to dodge the standard cross-product
+    singularity at the poles (right = look × worldUp has ~zero length when
+    look is nearly parallel to worldUp). That avoidance meant the ring's
+    plane always contained the world Y-axis — so looking straight up put
+    the camera's own view axis coplanar with the ring: edge-on, i.e. a
+    line. Fixed properly instead of avoided: the reference axis fed into
+    the cross product now swaps to world-FORWARD (0,0,1) specifically when
+    |look.y| > 0.999 (within ~2.5° of straight up/down) — never parallel to
+    a near-vertical look direction, so the basis (right = look×refUp,
+    ringUp = right×look) stays well-defined at every pitch, and the ring
+    now properly faces the camera like a target reticle regardless of
+    pitch. One accepted minor artifact: a brief visual snap exactly at the
+    ~2.5°-from-vertical threshold where the reference axis switches — a
+    standard trade-off for this kind of look-at basis, only visible in a
+    narrow band most play doesn't linger in, not worth the extra
+    complexity of blending across it for a cosmetic ring.
+    Built, deployed to server mods folder (server running, not restarted).
+    Not live-tested yet.
+
+────────────────────────────────────────────────────────
+SESSION 37 (2026-08-24, same day, continued) — ARROW RING REDESIGN: FIXED
+MAX AREA INSTEAD OF UNBOUNDED GROWTH; DECORATIVE PARTICLE RINGS REMOVED
+────────────────────────────────────────────────────────
+User feedback on session 27/33's arrow-ring work: remove the "white light
+circle" (END_ROD particles) and the "excessive" enchant circle (ENCHANT
+particles, described as too many circles in one place); the earlier
+"limit the radius expansion" fix (session 27's MAX_PER_RING/RING_GAP) was
+"solved wrong" — it limited how many arrows fit in a ring before starting a
+NEW, LARGER one (radius still grows with arrow count), not the actual max
+area the whole formation occupies; and the "mage spell circles" they'd
+asked for (session 27) should be made of the ARROWS themselves, not
+particle effects layered on top.
+
+[x] Removed session 33's spawnRingEffect() entirely — both particle rings
+    (ParticleTypes.ENCHANT and ParticleTypes.END_ROD) and their RING_FX_*
+    constants gone, along with the now-unused ParticleTypes import. This
+    directly addresses "remove the white light circle" and "enchant circle
+    is excessive" — there's no separate decorative particle layer left at
+    all now, only the arrows.
+[x] Redesigned the arrow ring math (tick()): replaced MAX_PER_RING/RING_GAP
+    (radius = ORBIT_RADIUS + ring*RING_GAP, unbounded — kept growing outward
+    forever as more rings were needed) with a fixed MAX_RADIUS cap: ring
+    radii are now spread evenly between ORBIT_RADIUS and MAX_RADIUS
+    (=1.3 blocks), however many rings (up to MAX_RINGS=4) are actually
+    needed — so the OUTERMOST ring's radius never exceeds MAX_RADIUS
+    regardless of arrow count; more arrows past that point pack the
+    existing rings denser instead of pushing the formation's radius further
+    out. MAX_PER_RING is now only a target used to decide how many rings to
+    create (n<=8 → 1 ring, 9-16 → 2, etc., capped at MAX_RINGS), not a hard
+    per-ring capacity limit. Also switched ring assignment from
+    fill-sequentially (ring=i/MAX_PER_RING, could leave the last ring
+    sparse) to round-robin (ring=i%totalRings), so rings end up evenly
+    populated. The "spin each ring the opposite direction from its
+    neighbour" mechanism from session 27 is unchanged — that's what
+    actually delivers the "circles made of arrows, spinning opposite
+    directions, like mage spell circles" look now that it's the ONLY
+    ring-producing mechanism left (no more particle rings duplicating/
+    cluttering the same visual space).
+    Built clean, deployed to server mods folder (server running — noted it
+    had been restarted independently by something other than this session
+    sometime around 10:22 today, not by any action taken here; solsai.jar
+    confirmed intact either way). Not live-tested yet.
+
+────────────────────────────────────────────────────────
+SESSION 36 (2026-08-24, same day, continued) — MODPACK UPDATE PREPPED,
+NOT YET APPLIED; POSSESSION-FLAPPING DIAGNOSED AS NETWORK, NOT CODE
+────────────────────────────────────────────────────────
+[x] User asked to update the server (mc-prominence2 / Prominence 2:
+    Hasturian Era) to the latest modpack version. Confirmed with user first
+    (backup: yes; target: jump to latest pinned file, not auto-tracking).
+      - Triggered an on-demand full backup via the existing itzg/mc-backup
+        sidecar (docker exec prominence2-backup backup now) rather than
+        waiting for its normal 6h cycle — first attempt failed ("file
+        changed as we read it", a live poi region file mid-write), retried
+        immediately and succeeded: backups/world-20260824-133044.tar.gz
+        (663MB, includes the full /data tree — mods folder too, so
+        solsai.jar is covered by this same backup).
+      - Looked up the actual latest CurseForge file for this modpack (via
+        WebFetch, not guessed): file 8703284, "v4.0.2", posted 2026-08-21,
+        still Minecraft 1.20.1 / Fabric (same loader/MC version as now —
+        good sign for mixin compatibility). Updated docker-compose.yml's
+        CF_PAGE_URL from the old pinned file (8632322) to this one. Still a
+        ONE-TIME pin (not auto-tracking latest going forward), per user's
+        choice.
+    NOT YET APPLIED — the compose file change alone does nothing until the
+    "minecraft" service is recreated (docker compose up -d), which stops
+    and restarts the live server exactly like every other MC-server-restart
+    this project has required explicit confirmation for. Stopped here to
+    ask before actually doing that.
+    FLAGGED RISK, not yet resolved either way: AUTO_CURSEFORGE mode may
+    resync the mods folder to match the new pack's manifest — solsai.jar
+    isn't part of that manifest (our own custom addition), so it's possible
+    (not confirmed) the update wipes it. If so, redeploying it after is
+    simple (copy back from solsai/build/libs/), but worth knowing about
+    going in — the fresh backup above covers a same-day rollback either way
+    if something worse happens.
+
+[x] Separately, user asked whether Apollo's Nilo code is outdated because
+    remote control "isn't controlling him." Investigated and it's NOT
+    stale code: Apollo's nilo.service (this is the Apollo-failover instance
+    — NOX is still unreachable at the network level, unchanged from
+    earlier today) started at 08:42, well after every file edit this
+    session finished (~00:12), and its own journal shows fresh [REMOTE]
+    Control acquired/released log lines matching this session's exact
+    format. The actual pattern found: control is acquiring and releasing
+    every few seconds (flapping) instead of holding for a full session —
+    Solsai itself answers locally in <1ms (ruled out as the bottleneck), so
+    this looks like a network reliability issue between the user's client
+    and Apollo, plausibly related to the same broader instability keeping
+    NOX unreachable, not a code or staleness problem. Told the user to
+    check their own connection; nothing changed code-wise for this.
+
+────────────────────────────────────────────────────────
+SESSION 35 (2026-08-24) — CLIENT CRASH-ON-LAUNCH FROM SESSION 34's TASK C;
+FOUND, REVERTED, REDEPLOYED. Task C's color scheme is OFF again — inventory
+screen works but is back to vanilla's default look until a safer approach
+is built.
+────────────────────────────────────────────────────────
+User reported the client crashed on load. Found the crash report at
+~/.local/share/atlauncher/instances/ProminenceIIHasturianEra/crash-reports/
+crash-2026-08-24_10.07.20-client.txt — exact cause, not guessed:
+  java.lang.IllegalStateException: Duplicate registration for minecraft:generic_9x5
+      at HandledScreens.register(HandledScreens.java:76)
+      at HudLinkClient.onInitializeClient(HudLinkClient.java:91)
+Root cause: session 34's Task C called
+HandledScreens.register(ScreenHandlerType.GENERIC_9X5, NiloInventoryScreen::new)
+on the theory that this only risked colliding with some OTHER mod that
+happened to also reuse a 45-slot generic container. That theory was wrong —
+confirmed by actually reading HandledScreens' own static initializer:
+vanilla itself unconditionally registers ALL SIX generic sizes (GENERIC_9X1
+through GENERIC_9X6) at bootstrap, every time, on every client. There is no
+GENERIC_9X* size that can be registered a second time without this same
+crash — it isn't a modpack-specific collision to route around by picking a
+different size, register() throws on ANY duplicate for ANY of them.
+[x] FIX: reverted the HandledScreens.register(...) call in HudLinkClient.
+    onInitializeClient() (and its now-unused imports). NiloInventoryScreen.
+    java is left in place, unused for now, for a follow-up. The real
+    inventory functionality from session 33 (GenericContainerScreenHandler
+    over NiloInventoryView, real slots/drag-drop/no position bugs) is
+    UNCHANGED and unaffected — only the black/red/gold reskin is reverted;
+    the screen now renders with vanilla's default chest look again.
+    Built, deployed to the ATLauncher client mods folder immediately (old
+    jar backed up), verified via md5sum the deployed jar matches the fresh
+    build. Confirming the crash is actually gone needs the user to relaunch
+    — not yet re-confirmed live.
+[ ] Task C, take two (not started): the color scheme is a legitimate ask,
+    just needs a mechanism that doesn't touch the global
+    HandledScreens/Registries.SCREEN_HANDLER type table at all. Direction
+    sketched but unbuilt: hook the actual MOMENT MinecraftClient.setScreen()
+    receives the GenericContainerScreen solsai's /open-bot-inventory
+    triggers (e.g. a client mixin on setScreen, or ScreenEvents.AFTER_INIT)
+    and swap in NiloInventoryScreen there instead — gated on a short-lived
+    client-side "we just requested this screen" flag (set right before
+    firing the HTTP call, cleared after a few seconds or once consumed) so
+    it only ever reskins the specific screen WE opened, never any other
+    mod's unrelated use of a same-shaped generic container. Needs actual
+    verification of the exact Fabric API hook available before building it
+    — this session's attempt to pre-verify GENERIC_9X5 safety via reading
+    source was RIGHT about registry-sync but WRONG about the vanilla
+    bootstrap collision, so the next attempt should be tested more
+    carefully before it's called safe, not just read-and-assumed again.
+
+────────────────────────────────────────────────────────
+SESSION 34 (2026-08-24) — 5 NEW TASKS FROM USER FEEDBACK, SPLIT OUT AND
+DOCUMENTED PER USER REQUEST ("make this into separate tasks, update agent")
+— NONE IMPLEMENTED YET, this was purely the organize-and-scope pass
+────────────────────────────────────────────────────────
+
+[ ] TASK A — Manifested arrows survive a client crash AND a full MC server
+    restart, floating forever, undismissable. User repro: crashed while
+    3 arrows were manifested; came back, still there; restarted the whole
+    MC server, still there. ROOT CAUSE (confirmed by reading the code, not
+    guessed): ArrowManifestManager.manifested is a pure in-memory
+    Map<UUID,List<UUID>>, cleared on server start (onServerStart()) — but
+    that only wipes the JAVA-SIDE bookkeeping. The actual ArrowEntity
+    objects were real entities spawned via world.spawnEntity(), so they get
+    saved into chunk NBT like anything else in the world and reload fine
+    after a restart — just with zero tracking left pointing at them, so
+    nothing ever repositions or discards them again. Session 27's ring math
+    and session 23/25's noClip/yaw fixes are all irrelevant to this — it's
+    purely a "nothing ever re-discovers these after a restart" gap.
+    FIX DIRECTION (not implemented): tag every manifested arrow at spawn
+    time with a command tag (arrow.addCommandTag(...), same pattern
+    CloneManager already uses for CLONE_TAG) so it stays identifiable across
+    a restart even with no in-memory tracking. Then, periodically (e.g.
+    every ~200 ticks inside tick(), not just at onServerStart() — chunks
+    containing the orphan may not even be loaded yet at server-start time,
+    only once a player gets near again) scan loaded entities for anything
+    carrying that tag whose UUID isn't in ANY currently-tracked player's
+    list, and discard() it. Self-heals as soon as the orphan's chunk loads,
+    regardless of exactly when that happens relative to server start.
+    Same class of leak likely worth checking for shields/clones too at some
+    point (not scoped into this task — arrows only, since that's the
+    reported case) — ShieldManifestManager's ItemDisplayEntity and
+    CloneManager's ghost Husks may have the identical exposure, untested.
+
+[ ] TASK B — Can't mine or attack while possessing Nilo (BotSneakScreen).
+    ROOT CAUSE (confirmed): remote-control.js's applyControlState() only
+    ever calls bot.swingArm() for cs.attack — that's a purely COSMETIC arm
+    animation with zero game effect (no damage dealt, no block broken).
+    Real mining needs bot.dig(block) (mineflayer's async start/complete
+    digging API); real melee needs bot.attack(entity). Neither is called
+    anywhere — attack/mine control has never actually done anything beyond
+    the visual swing.
+    FIX DIRECTION (not implemented): raycast each tick via
+    bot.entityAtCursor()/bot.blockAtCursor() (same helpers session 31's
+    place-block fix already uses) to find what's being aimed at; if an
+    entity, bot.attack(entity); if a block, track which block is currently
+    being dug (a module-level "current dig target" key) — start a new
+    bot.dig(block) only when the target actually changes, call
+    bot.stopDigging() the instant cs.attack releases (matching vanilla:
+    releasing LMB early cancels the break) or when the target changes
+    mid-dig. mineflayer's dig()/attack() already swing the arm internally,
+    so the existing standalone swingArm() call should be removed rather
+    than left alongside the new real calls (would double-swing/conflict).
+
+[ ] TASK C — Give the new real-inventory screen (session 33's
+    GenericContainerScreenHandler/ScreenHandlerType.GENERIC_9X5 work) a
+    black/red/gold color scheme, matching the RED TERMINAL aesthetic
+    CommandPanelScreen already uses. NOT just a config tweak: because that
+    screen deliberately reuses a stock vanilla ScreenHandlerType (to dodge
+    the registry-sync risk documented in session 33), giving it custom
+    colors means overriding the CLIENT-side renderer via
+    HandledScreens.register(ScreenHandlerType.GENERIC_9X5, ourScreen::new)
+    — confirmed this is safe w.r.t. registry-sync (HandledScreens is a
+    purely local client-side type→renderer map, unrelated to
+    Registries.SCREEN_HANDLER's actual synced content) — but it DOES
+    override rendering for EVERY GENERIC_9X5 screen opened on this client,
+    including any unrelated mod that happens to reuse that exact vanilla
+    type/size for its own container (9x5 = 45 slots isn't a standard chest
+    size vanilla itself ever opens, but some other mod on this 400+-mod
+    pack theoretically could reuse it) — real but probably minor risk,
+    worth a quick check of whether anything else on this modpack uses a
+    45-slot generic container before shipping this.
+
+[ ] TASK D — "prizmo system menu opens even when prizmo system is not
+    activated." Investigated the obvious candidate (V key → CommandPanelScreen,
+    HudLinkClient.java) and it's ALREADY correctly gated:
+    `while (skillWheelKey.wasPressed()) { if (BotTracker.enabled && ...)
+    client.setScreen(new CommandPanelScreen()); }`, and BotTracker.enabled
+    defaults to false with no persistence/config load anywhere — so on pure
+    static reading, V shouldn't open anything before Alt+C is pressed at
+    least once this client session. Could not confirm a root cause from
+    code alone — this needs the user's actual repro steps (which specific
+    "activation" they mean, which key/action opens it, right after launch
+    or after some other action) before guessing further, per this project's
+    standing "ask before debugging" rule. Flagging as open, not diagnosed.
+
+[ ] TASK E — CommandPanelScreen's BOTS tab "TP NILO"/"TP ZOTE" buttons send
+    "tp to me" as PUBLIC chat (chat() helper →
+    player.networkHandler.sendChatMessage(msg), visible to everyone), not a
+    private message — user wants these private, same as session 29's
+    BotInteractScreen /msg fix. FIX DIRECTION (not implemented): switch
+    these two buttons to send a real private whisper instead — e.g.
+    sendChatCommand("msg " + botName + " tp to me") (the same
+    sendChatCommand API session 29 established is the correct way to send
+    an actual command rather than broadcast literal text as chat) — verify
+    IS_TP_TO_ME's regex in commands/navigation.js still matches "tp to me"
+    when it arrives via the whisper handler (bot.on('whisper', ...) in
+    nilo.js, routes through handleNaturalCommand same as any other command
+    channel) rather than public chat.
+
+[x] ALL FOUR IMPLEMENTED (D dropped per user — "ignore D"):
+      - Task A: ArrowManifestManager.java — ORPHAN_TAG command-tag on every
+        manifested arrow at spawn, new sweepOrphans() (runs every
+        ORPHAN_SWEEP_TICKS=200 ticks inside tick(), unconditionally, even
+        when `manifested` is empty) discards any tagged arrow not in ANY
+        player's currently-tracked list. Does NOT retroactively clean up
+        the user's own already-orphaned 3 arrows from before this fix
+        existed (untagged, predate the mechanism) — offered to help hunt
+        those down manually if wanted, not done.
+      - Task B: remote-control.js — cs.attack now raycasts
+        (entityAtCursor/blockAtCursor) and calls real bot.attack(entity) or
+        a tracked bot.dig(block)/bot.stopDigging() state machine instead of
+        just bot.swingArm(). releaseAll() also stops an in-progress dig.
+      - Task C: new NiloInventoryScreen.java (prizmo-system) — black/red/
+        gold HandledScreen<GenericContainerScreenHandler> registered via
+        HandledScreens.register(GENERIC_9X5, ...) in HudLinkClient's
+        onInitializeClient(), replacing vanilla's default chest texture for
+        that screen. Confirmed this registration is client-side-only,
+        unrelated to the registry-sync mechanism flagged when this screen
+        was first built (session 33) — no new risk introduced.
+      - Task E: CommandPanelScreen.java — chat(msg) helper (sendChatMessage,
+        broadcast as public chat) replaced with whisper(botName, msg)
+        (sendChatCommand("msg "+botName+" "+msg), a real private command) —
+        "TP NILO" whispers NILO, "TP ZOTE" whispers ZOTE (previously both
+        silently relied on a single fixed recipient / trailing text in the
+        message body; now each targets its own bot explicitly).
+    Built both projects clean. Deployed solsai-1.10.2.jar (server mods
+    folder) and prizmo-system-0.1.18.jar (ATLauncher client mods folder),
+    old jars backed up (.bak-20260824-001501) per user's explicit ask to
+    keep a rollback path for C specifically. Server running, NOT restarted.
+    remote-control.js (Task B) built/syntax-checked but NOT yet synced to
+    NOX — NOX is currently unreachable at the network level ("Destination
+    host unreachable" from the router itself, not just an SSH timeout;
+    confirmed via ping, not assumed) — sync deferred until it's back.
+    NOTHING in this batch is live-tested yet.
+
+────────────────────────────────────────────────────────
+SESSION 33 (2026-08-24) — ARROW SUMMON: TWIN COUNTER-ROTATING PARTICLE
+RINGS; BOT INVENTORY REPLACED WITH A REAL VANILLA CONTAINER SCREEN (near-
+miss: original plan would have repeated the shield_block registry-sync
+mistake — caught before deploying, not after)
+────────────────────────────────────────────────────────
+[x] Arrow manifestation: added two fixed-radius decorative particle rings
+    (ArrowManifestManager.java, RING_FX_RADIUS_1/2, spawnRingEffect()) around
+    the floating-arrow formation, spinning opposite directions — a "twin
+    summoning circle" look. Deliberately NOT tied to arrow count (unlike the
+    session-27 MAX_PER_RING/RING_GAP arrow-spillover rings, which DO grow
+    with more arrows) — user specifically asked to avoid unbounded radius
+    growth, so this is always exactly 2 rings at fixed size regardless of
+    how many arrows are out. Built, deployed to server mods folder (server
+    running, not restarted). Not live-tested yet.
+
+[x] Bot inventory viewing/management REPLACED end to end — user's complaint
+    ("item position mismatched, buggy... is there a way to replace it with
+    an actual minecraft interface?") was accurate: BotInventoryScreen was a
+    fully custom-drawn Screen hand-placing item icons by pixel math,
+    refreshed by polling Solsai's /bot-inventory every 2s and pushing
+    changes back through /item-move — a hand-rolled approximation, not a
+    real inventory, hence the drift/bugs.
+      IMPORTANT CORRECTION, surfaced to the user live: the FIRST plan (a
+      brand-new custom ScreenHandlerType, registered via
+      ScreenHandlerRegistry.registerSimple) would have repeated this
+      project's own shield_block/Registries.BLOCK mistake (session 19) —
+      confirmed by reading fabric-registry-sync-v0's FabricRegistryInit
+      source directly: Registries.SCREEN_HANDLER IS marked
+      RegistryAttribute.SYNCED ("Synced in OpenScreenS2CPacket"), meaning a
+      custom type would have kicked every connecting player who doesn't have
+      prizmo-system installed, the instant Solsai loaded it — exactly what
+      the user was (rightly, if not for the reason either of us initially
+      focused on) asking about when they asked "will it stop other players
+      from being able to join the server?" Caught this BEFORE deploying by
+      actually reading the registry-sync source rather than assuming the
+      new type was safe just because BLOCK was the only past incident on
+      record.
+      ACTUAL IMPLEMENTATION (registry-sync-safe): reuses vanilla's OWN
+      GenericContainerScreenHandler + ScreenHandlerType.GENERIC_9X5 (the
+      same type chests use, already in every client's registry — zero
+      custom registration, zero sync risk) wrapped around a new
+      NiloInventoryView.java (solsai) — a 45-slot Inventory adapter mapping
+      1:1 onto the bot's REAL PlayerInventory (hotbar/main/armor/offhand,
+      41 real slots + 4 always-empty filler since 41 doesn't fill a 6th
+      row). New ContextMod.java endpoint GET /open-bot-inventory?player=X&
+      bot=NILO calls viewer.openHandledScreen(...) server-side — the
+      standard vanilla mechanism, no client.setScreen() needed at all, the
+      server pushes the real open-screen packet itself.
+      prizmo-system side: InteractionMixin's plain right-click and
+      BotSneakScreen's E key now just fire that HTTP endpoint
+      (SolsaiClient.getAsync) instead of constructing a custom Screen.
+      BotInventoryScreen.java deleted outright (confirmed zero remaining
+      code references, not just commented out).
+      ACCEPTED TRADE-OFFS, both flagged to the user rather than silently
+      shipped: (1) armor-slot type restriction (only helmets in the helmet
+      slot etc.) is NOT enforced the way vanilla's dedicated
+      PlayerScreenHandler armor slots do — GenericContainerScreenHandler
+      uses plain Slots for everything; adding that back would need either
+      the registry-sync risk above or substantially more code for a
+      cosmetic nicety the bug report didn't ask for. (2) E-during-possession
+      no longer round-trips back into BotSneakScreen the way the old
+      BotInventoryScreen(name, true) constructor flag did — a server-pushed
+      screen replaces whatever's open client-side, so opening inventory
+      from possession now ends possession the same as ESC would; re-enter
+      with shift+right-click afterward.
+    Built both projects clean, deployed both jars (server mods folder +
+    ATLauncher client mods folder, old jars backed up). NOT live-tested —
+    needs a server restart (to load solsai's new endpoint/view class) AND a
+    full client relaunch (Fabric mods only load then) before either half
+    works. Also NOT committed to git anywhere yet, consistent with
+    everything else in this session's giant pile of uncommitted changes on
+    both NOX and Apollo.
+
+────────────────────────────────────────────────────────
+SESSION 32 (2026-08-23, same day, continued) — NEW "go there" COMMAND
+────────────────────────────────────────────────────────
+[x] commands/navigation.js: new IS_GO_THERE ("go there"/"walk there"/"head
+    there"/"vai ali"/"vai lá"/etc.) — reuses gaze.js's getPlayerGazeTarget()
+    (the same MASTER-raycast helper the existing "this" command already
+    uses) to get the position being looked at (block or entity), then
+    pathfinds there (GoalNear, radius 1) and holds position on arrival
+    (state.exploringEnabled = false, same pattern as IS_COME). Documented
+    in MANUAL.txt. Synced to NOX, nilo.service restarted.
+    NOTE: accidentally scp'd a stray copy of navigation.js to NOX's repo
+    ROOT (not commands/) on the first sync attempt — caught it, corrected,
+    and removed the stray file before it could confuse anything. The real
+    commands/navigation.js is confirmed byte-identical between both
+    machines.
+    Not yet live-tested.
+
+────────────────────────────────────────────────────────
+SESSION 31 (2026-08-23, same day, continued) — POSSESSION: RIGHT-CLICK NOW
+PLACES BLOCKS; AUTONOMOUS BEHAVIOR SUPPRESSED WHILE POSSESSED; LADDER +
+INVENTORY-UI ASKS DEFERRED (one likely already improved, one needs specifics)
+────────────────────────────────────────────────────────
+User reported 4 things after confirming possession itself works: can't place
+blocks with right-click, inventory UI is "messy," hard to climb ladders while
+possessed, and Nilo moves on his own while being controlled.
+
+[x] BUG — right-click never placed blocks. remote-control.js's applyControlState
+    only ever called bot.activateItem() for cs.use — that sends a plain
+    "use item" packet with no target block reference; placing a block needs
+    bot.placeBlock(referenceBlock, faceVector), built from a raycast
+    (bot.blockAtCursor()) to know WHERE to place it, which nothing here was
+    doing. FIX: when the held item resolves to a real block
+    (bot.registry.blocksByName), raycast via blockAtCursor(5) and
+    bot.placeBlock() against it; anything else still goes through
+    activateItem() as before. Also added edge-detection (lastUse, mirroring
+    the existing heldSlot one-shot pattern) so a held-down right-click
+    doesn't retry placement every single ~100ms poll — placeBlock() throws
+    on failure and repeated attempts every tick would've been wasteful even
+    when it didn't.
+
+[x] BUG — Nilo moved/looked around on his own while being possessed.
+    monitor.js runs two independent setInterval loops (proximity/threat scan
+    every 2s, autonomous behaviors every ~2s) with NO awareness of
+    possession at all — specifically the threat-scan's auto-engage-combat
+    (startAssist, full pathfinding + attack) and the "natural look"
+    (bot.lookAt, rotates toward nearby entities) directly fight a
+    possessing player's own movement/camera input. FIX: new shared
+    state.possessed flag (state.js), set true/false by remote-control.js on
+    control acquire/release (and cleared in stopRemoteControl too, for the
+    disconnect path) — monitor.js's threat-scan and the entire autonomous-
+    behaviors interval now skip outright while it's true.
+
+[ ] Ladder climbing "difficult" while possessed — NOT changed this round,
+    no clear code bug identified (forward+jump against a climbable block is
+    handled by mineflayer's normal physics same as any other movement
+    input; nothing here treats ladders specially, for better or worse).
+    Likely to feel noticeably better on its own now that session 30's mouse-
+    inversion fix landed (aiming up at a ladder was fighting inverted pitch
+    before) — flagged to re-test rather than guessing at a ladder-specific
+    change with no concrete bug pinned down yet.
+
+[ ] "Inventory is messy, needs improvement" — NOT started. Too vague to act
+    on blind (BotInventoryScreen.java is 484 lines, could mean layout,
+    slot alignment, sorting, missing labels, or something else entirely) —
+    asked the user what specifically about it is messy before touching it.
+
+Synced remote-control.js + monitor.js + state.js to NOX, restarted
+nilo.service there (drops any in-progress possession session, same pattern
+as sessions 28/30). Not yet re-tested live.
+
+────────────────────────────────────────────────────────
+SESSION 30 (2026-08-23, same day, continued) — POSSESSION MODE CONFIRMED
+WORKING LIVE; MOUSE INVERTED + CURSOR NOT RE-CENTERING, BOTH FIXED
+────────────────────────────────────────────────────────
+Session 28's remote-control.js fix confirmed working live — WASD/attack/use
+all work now. Two new bugs reported from that same live test.
+
+[x] BUG — look direction inverted on both axes. Root cause confirmed against
+    mineflayer's own source (node_modules/mineflayer/lib/conversions.js):
+    toNotchianPitch = pitch => -pitch, toNotchianYaw = yaw => PI - yaw.
+    mineflayer's bot.entity.yaw/pitch use the OPPOSITE sign convention from
+    vanilla's raw protocol values — a delta computed in vanilla terms (which
+    is what BotSneakScreen's cs.yaw/cs.pitch, in degrees, actually are) is
+    the NEGATED delta in mineflayer terms, on BOTH axes. remote-control.js's
+    applyControlState() was adding the raw vanilla-convention delta straight
+    onto bot.entity.yaw/pitch with no conversion, applying every mouse move
+    backwards. FIX: negate both dy and dp before adding
+    (bot.entity.yaw - dy*PI/180, bot.entity.pitch - dp*PI/180). Synced to
+    NOX, nilo.service restarted there (drops any in-progress possession
+    session, same as session 28's restart) — not yet re-tested live.
+
+[x] BUG — mouse cursor doesn't stay centered, stops responding once it hits
+    a screen edge. Root cause: BotSneakScreen never actually locks the OS
+    cursor — mouseMoved() was receiving normal, boundary-clamped absolute
+    screen coordinates (same as any menu's visible pointer), so deltas just
+    stopped the instant the real OS cursor reached the window edge, same as
+    any bounded 2D input. FIX: BotSneakScreen.init()/removed() now toggle
+    GLFW_CURSOR_DISABLED directly via raw GLFW
+    (GLFW.glfwSetInputMode(...)) — NOT via the vanilla client.mouse.
+    lockCursor() helper, which was tried and rejected: that method's own
+    first action is client.setScreen(null), which would immediately close
+    this very screen. Disabled mode hides the OS cursor and reports
+    unbounded virtual deltas (confirmed via Mouse.java's onCursorPos: it
+    calls screen.mouseMoved() unconditionally whenever a screen is open,
+    regardless of lock state, so the existing delta-based mouseMoved() logic
+    needed no other changes). Built, deployed to the ATLauncher client mods
+    folder. Needs a full client relaunch to load — not yet re-tested.
+
+────────────────────────────────────────────────────────
+SESSION 29 (2026-08-23, same day, continued) — BOTINTERACTSCREEN'S /msg WAS
+NEVER ACTUALLY A COMMAND
+────────────────────────────────────────────────────────
+User noticed, from a pasted server log, that Alt+right-click private chat
+("/msg NILO hey") showed up server-side as an ordinary public chat line —
+"[Not Secure] <PrizmoElectric> /msg NILO hey" — not a private whisper.
+
+[x] BUG — BotInteractScreen.send() called
+    client.player.networkHandler.sendChatMessage("/msg " + botName + " " + msg).
+    sendChatMessage() sends a plain ChatMessageC2SPacket — the leading "/" in
+    the string is just text to the server, not a command marker (that
+    detection is normally done client-side, by the vanilla chat GUI, BEFORE
+    deciding whether to call sendChatMessage or sendChatCommand). So every
+    "private" message was actually broadcast to the whole server as public
+    chat, literally containing "/msg NILO ...", and the /msg command itself
+    was never executed — confirmed exactly matches the pasted log format
+    (public-chat log lines look like "<Name> text"; an actually-executed
+    /msg is not logged that way).
+    FIX: use networkHandler.sendChatCommand("msg " + botName + " " + msg)
+    instead — the correct API for sending a real command, which also
+    expects the command text WITHOUT the leading slash (confirmed via the
+    mapped 1.20.1 source, ClientPlayNetworkHandler.sendChatCommand).
+    Built, deployed to the ATLauncher client mods folder (old jar backed
+    up). Needs a full client relaunch to load (Fabric mods only load at
+    launch) — not yet re-tested.
+
+────────────────────────────────────────────────────────
+SESSION 28 (2026-08-23, same day, continued) — POSSESSION MODE COMPLETELY
+DEAD ON NOX (root cause: stale remote-control.js) — NOX/APOLLO RESYNCED,
+8 FILES, NOX'S NILO RESTARTED
+────────────────────────────────────────────────────────
+User report: possession mode shows Nilo's POV fine (camera attach is 100%
+client-local) but WASD/mouse/attack do nothing — confirmed via the
+in-screen key-indicator HUD that client-side input capture itself was fine
+(W/A/S/D lit up correctly), meaning the break was somewhere between the
+client's HTTP call and the bot actually applying it.
+
+[x] ROOT CAUSE — Nilo currently runs on NOX (192.168.1.100), not Apollo
+    (confirmed live: nilo.service was inactive on Apollo since 09:14, but
+    running on NOX since 22:41). NOX's git checkout is on the same commit
+    as Apollo (0d6b944) but its WORKING TREE had fallen out of sync —
+    checksummed every modified file both machines reported and found 3 with
+    genuinely different content (not just "both modified", actually
+    different bytes): remote-control.js, commands/navigation.js, nilo.js,
+    state.js — plus 4 more files modified ONLY in Apollo's tree that NOX
+    had never received at all: combat.js, commands/inventory.js, items.js,
+    letta.js (all session-20 equip/tellMaster/action-tracking work).
+    remote-control.js was the actual possession bug: NOX's copy was an
+    OLDER pre-fix version hardcoding `const HOST='localhost'; const
+    PORT=8080;` for Solsai polling, instead of Apollo's fixed version that
+    resolves the real server host via config.js's getSolsaiBase() (host +
+    port 8081). Verified live: `curl localhost:8081/context` from NOX itself
+    → connection refused (status 000); `curl 192.168.1.101:8081/context`
+    (Apollo's real IP) → 200. So NOX's /bot-control-state poll was silently
+    failing every single request (caught by pollControlState()'s own
+    req.on('error') → resolve(null)) — cs.active was never true, control
+    was never acquired, and since it was never acquired even once,
+    remote-control.js's own "[REMOTE] Control acquired/released" log lines
+    never printed either (confirmed: grepped 400 lines of NOX's journal,
+    zero matches) — total silent failure, matching the reported symptom
+    exactly. The camera still worked because MinecraftClient.
+    setCameraEntity() is pure client-side state, no network round trip
+    needed.
+    Also found (not the possession bug, but real, separate gaps NOX was
+    missing): commands/navigation.js — session 20's "stop exploring"
+    fix (IS_STOP_EXPLORE ordered before IS_STAY) was Apollo-only, so on NOX
+    "stop exploring" still silently did nothing, swallowed by the "stay"
+    handler's bare /stop/ regex. nilo.js — Apollo-only "!"→"#" chat prefix
+    alias AND the entire private-whisper handler (Alt+right-click chat in
+    prizmo-system's BotInteractScreen) were missing on NOX — whispering to
+    NOX's Nilo would have gotten no reply at all. state.js — missing the
+    combatTarget field, so the HUD's "action" display never reflected combat
+    on NOX.
+    FIX: scp'd all 8 diverged files from Apollo's working tree to NOX
+    (remote-control.js, commands/navigation.js, nilo.js, state.js,
+    combat.js, commands/inventory.js, items.js, letta.js), verified
+    md5sum-identical after copy, then `systemctl --user restart
+    nilo.service` on NOX. Restarted cleanly (~3s), reconnected, restored
+    saved behavior (follow), Discord relogged. One unrelated pre-existing
+    issue noted in the restart log, NOT touched — [STREAM] mobile-viewer
+    browser missing on NOX (puppeteer chrome not installed there), separate
+    from anything this session touched.
+    NOT yet re-tested — user needs to re-enter possession (shift+right-
+    click Nilo again, the restart dropped any in-progress session) to
+    confirm WASD/look/attack/use actually work now.
+    STILL OPEN: nothing was committed to git anywhere — this was a direct
+    working-tree-to-working-tree file copy (scp), same as every previous
+    NOX/Apollo reconciliation this project has needed (sessions 18, 22).
+    The underlying process gap (uncommitted fixes made on one machine
+    silently never reaching the other) is structural and will recur unless
+    something actually commits+syncs regularly — flagging again, not fixed
+    at the process level this round either.
+
+────────────────────────────────────────────────────────
+SESSION 27 (2026-08-23, same day, continued) — ARROWS: MULTI-RING LAYOUT
+────────────────────────────────────────────────────────
+User feedback (feature ask, not a bug): with many arrows manifested, wanted
+them to spill into extra concentric circles ("like a magician casting with
+multiple circles") instead of all packing onto one ever-more-crowded ring.
+
+[x] ArrowManifestManager.java tick(): arrows beyond MAX_PER_RING=8 now spill
+    into additional rings — ring = i/MAX_PER_RING, radius = ORBIT_RADIUS +
+    ring*RING_GAP(0.45). Each ring spins the opposite direction from its
+    neighbour (t * ±1 by ring parity) for a layered look rather than
+    identical concentric circles. n<=8 (the common case) is bit-for-bit the
+    same single-ring behavior as before — only n=1's spread=0 special case
+    and n<=MAX_PER_RING path are unchanged; new rings only appear once
+    accumulation actually exceeds 8.
+    Built, deployed to server mods folder (server running, not restarted —
+    standing rule). Not live-tested yet.
+
+────────────────────────────────────────────────────────
+SESSION 26 (2026-08-23, same day, continued) — ENCHANT SYSTEM: FOUND WHY IT
+DOESN'T APPLY (partial fix, NOT restart-tested yet); EFFECTS "CTRL+DEL DOESN'T
+STOP THEM" BUG FIXED (real, verified); TAB BAR TEXT OVERLAP FIXED (screenshot-
+confirmed); PER-SLOT SHIELD/ARROW ENCHANT INFUSION UI — NOT STARTED, holding
+until the base mechanism below is confirmed working
+────────────────────────────────────────────────────────
+User asked: how the enchant tab works, fix its "letters don't have space" UI
+bug, fix enchants not actually applying (main problem), add a per-
+slot (head/torso/legs/shoes/shield/arrows) enchant-infusion UI, then look at
+why potion effects don't apply, then add search. Also reported mid-session,
+with a screenshot: ctrl+del doesn't actually stop active potion effects.
+User separately confirmed type-to-filter (already in ENCHANT_IDX/EFFECT_IDX)
+already covers the "search" ask — nothing built for that, it exists.
+
+[~] "Enchants not applied" — ROOT CAUSE CONFIRMED, one working fix landed,
+    one known gap still open:
+      - EnchantTracker's real mechanism: a per-player Set<Identifier> of
+        "active" enchant IDs. LivingEntityEnchantMixin is supposed to inject
+        phantom max-level ItemStacks into ServerPlayerEntity.getArmorItems()/
+        getHandItems() so vanilla's EnchantmentHelper picks them up
+        everywhere. Confirmed via the live server log
+        (mc-prominence2/data/logs/latest.log:748, "accessories-fabric.
+        mixins.json:LivingEntityMixin ... adjustLooting ... Shift.BY=2 ...
+        exceeds the maximum allowed value") that the "accessories" mod (a
+        Curios-style trinket-slot mod) ALSO rewrites LivingEntity's
+        equipment-iteration methods — the exact conflict
+        LivingEntityEnchantMixin's session-19 require=0 comments predicted
+        but never named. That mixin's two injects still don't resolve; left
+        as-is (harmless, non-fatal, unchanged this round).
+      - FIX (new, additive route): new EnchantmentHelperMixin.java hooks
+        EnchantmentHelper.getEquipmentLevel(Enchantment, LivingEntity)
+        instead — confirmed via the mapped 1.20.1 source
+        (EnchantmentHelper.java) that this is the single static choke point
+        vanilla itself uses for looting, knockback, fire aspect,
+        respiration, depth strider, efficiency, aqua affinity, frost
+        walker, soul speed, and swift sneak — a plain utility method no
+        accessory/combat mod has reason to also touch, sidestepping the
+        conflict above entirely instead of trying to win it. Registered in
+        solsai.mixins.json.
+      - KNOWN GAP, not fixed this round: Protection and melee Sharpness do
+        NOT go through getEquipmentLevel — confirmed in LivingEntity.java,
+        protection reads EnchantmentHelper.getProtectionAmount(this.
+        getArmorItems(), source) directly, i.e. still depends on the same
+        getArmorItems() the accessories mod conflicts with. These two will
+        still not apply from the passive enchant list until a further,
+        separate fix (likely a call-site-specific @Redirect inside
+        LivingEntity rather than another blanket method override — not
+        attempted this round, unverified speculation, flagged rather than
+        guessed at further per advisor guidance).
+      - require=0 used on the new mixin's injection (matching
+        LivingEntityEnchantMixin's existing pattern), NOT the project's
+        defaultRequire=1 — deliberate: this can only be verified by an
+        actual restart (mixins apply at classload), the server is live with
+        real players/bots on it right now, and a require=1 failure would
+        crash the WHOLE mod (and likely the server) on next boot instead of
+        just silently not-applying. NOT YET RESTART-TESTED. After the next
+        restart: confirm live (put on Looting/Knockback/etc. via the panel
+        and check it actually does something), and/or grep the fresh log
+        for a "0 targets"/conflict warning naming EnchantmentHelperMixin the
+        same way accessories' conflict was found.
+
+[x] BUG (screenshot-confirmed) — ctrl+del ("clear all") on the EFFECTS tab
+    updated the tracker but left real potion effects running on the player
+    for their full remaining duration (up to 5 min). Root cause:
+    EffectTracker.clearPlayer() wiped BOTH its `active` set (what should be
+    on the player) AND its `applied` set (what's actually been put on the
+    player) in the same call — but the only code that actually calls
+    player.removeStatusEffect() lives in tick()'s reconcile loop, which
+    works by diffing `applied` against `active` and stripping anything in
+    the former but not the latter. Clearing both at once left the
+    reconciler with nothing to diff against, so it never learned anything
+    needed removing. Toggling a single effect off was never affected (only
+    touches `active`, leaving `applied` for the reconciler) — this was
+    specifically the bulk-clear path.
+    FIX: split clearPlayer() (used by the UI's /effect-clear — now only
+    clears `active`, leaving `applied` for tick() to reconcile normally,
+    same as a single toggle-off) from a new disconnectPlayer() (used only by
+    ContextMod.java's player-disconnect handler, where no more tick()
+    reconciliation will ever run for that player — purges both maps
+    outright, same as the old behavior, since leaking entries forever would
+    be its own bug). EnchantTracker.clearPlayer() has no equivalent bug —
+    enchants have no persistent "applied to the entity" state the way
+    potion effects do, so needed no change.
+
+[x] BUG (screenshot-confirmed) — RED TERMINAL tab bar: labels for 8 tabs
+    across a 340px panel get ~42px each; full-size text for "ENCHANTS"/
+    "EFFECTS"/"CLONES" is wider than that, and drawCenteredTextWithShadow
+    doesn't wrap or shrink to fit — screenshot showed "CLONES" clipped to
+    "CLONE" and "ENCHANTS" eating the first letter of "EFFECTS"
+    ("ENCHANTSFFECTS"). FIX: renderTabBar() now pushes a matrix scale
+    (TAB_LABEL_SCALE=0.7, sized to fit the widest bold-active label,
+    "ENCHANTS", within one tab's width) around each label's own center
+    point before drawing, instead of widening the whole panel (which would
+    have touched every other hardcoded layout constant in this file).
+
+[ ] NOT STARTED — per-slot shield/arrow enchant infusion UI (head/torso/
+    legs/shoes/shield/arrows, expandable picker). Deliberately held back
+    per advisor guidance: building a new per-slot data model and UI on top
+    of an enchant-application mechanism that isn't yet confirmed working
+    live (see above, needs a restart to verify) risks a lot of wasted work
+    if the underlying mechanism needs more iteration. Revisit once
+    EnchantmentHelperMixin is confirmed applying cleanly.
+    Note: arrows already read from the SAME shared per-player EnchantTracker
+    set today (ArrowManifestManager.shoot() checks flame/knockback/piercing
+    via EnchantTracker.getActiveSet()) — there is currently no per-slot
+    separation anywhere, it's one global list. A real "enchant only the
+    shield, not the arrows" feature needs EnchantTracker's data model
+    changed from Map<UUID,Set<Identifier>> to something slot-keyed, not
+    just a new UI layer.
+
+Built + deployed both projects' jars to their respective live locations
+(solsai-1.10.2.jar → server mods folder, prizmo-system-0.1.18.jar → client
+mods folder), old jars backed up. prominence2 container IS running — jars
+copied to disk only, did NOT restart (standing rule). Nothing about the
+enchant/effect changes is live-tested yet; the tab-bar visual fix needs a
+full client relaunch (Fabric mods only load then) to see.
+
+────────────────────────────────────────────────────────
+SESSION 25 (2026-08-23, same day, continued) — LIVE TEST FEEDBACK ON ARROW
+FIX: POSITION/PICKUP GOOD, VERTICAL FACING GOOD, HORIZONTAL FACING BACKWARD
+(new bug from session 23's noClip fix) — FIXED
+────────────────────────────────────────────────────────
+First live confirmation of session 23's work: floating arrows no longer get
+sucked into inventory and hold position correctly. User reported one new
+issue: arrows point BACK at the player when looking left/right/forward
+(horizontal), but correctly point away when looking up/down (vertical) —
+and a separate non-issue (arrows "disappearing") that the user correctly
+self-diagnosed as shield proximity-discard (session 21's known finding:
+shields discard any projectile within PROJ_RADIUS regardless of owner),
+not a new bug.
+
+[x] BUG — session 23's setNoClip() fix (correct, needed for client/server
+    sync) had a side effect: PersistentProjectileEntity.tick() computes the
+    arrow's rendered YAW as atan2(-vx,-vz) when noClip is true vs. atan2(vx,
+    vz) when false (confirmed again against the same mapped source used in
+    session 23) — vanilla's reason for that branch is a very different case
+    (an arrow bounced backward off a shield, flipped so it still LOOKS like
+    it's flying its original forward direction) that doesn't apply to a
+    stationary floating arrow. PITCH never branches on noClip
+    (atan2(vy, horizontalLength) always), which is exactly why vertical
+    facing was already correct while horizontal wasn't.
+    FIX: ArrowManifestManager.tick() now feeds the tiny per-tick orientation
+    velocity in with horizontal (x/z) components PRE-NEGATED —
+    arrow.setVelocity(-look.x*0.02, look.y*0.02, -look.z*0.02) instead of
+    (look.x*0.02, ...). The double negation inside vanilla's flipped formula
+    (atan2(-(-vx),-(-vz)) == atan2(vx,vz)) cancels out to the same result
+    the non-flipped branch would give, without having to touch noClip at
+    all. Y left untouched since pitch was never affected. Scoped to the
+    floating/idle tick only — shoot() already sets noClip=false right
+    before firing (session 23), so released arrows use the correct
+    unflipped branch already and needed no change.
+    Built clean, deployed to /home/prizmo/mc-prominence2/data/mods/
+    solsai-1.10.2.jar (old backed up .bak-20260823-221122). Server
+    (prominence2 container) IS currently running — jar copied to disk only,
+    did NOT restart the container (standing rule). Takes effect on next
+    server restart, not yet re-tested.
+
+────────────────────────────────────────────────────────
+SESSION 24 (2026-08-23, same day, continued) — SHIELD "REDUCE" FEATURE ADDED
+(gap: only "Dismiss All" existed); RED TERMINAL DISMISS BUTTONS FIXED TO
+RE-QUERY REAL STATE INSTEAD OF TRUSTING THEIR OWN ACK RESPONSE
+────────────────────────────────────────────────────────
+User report: "clones still fail to be dismissed" (RED TERMINAL CLONES tab —
+confirmed via question, not the mineflayer clone-army chat command) + "no
+option to reduce shield count, the two buttons both say +1."
+
+[x] Shields tab had no partial-dismiss capability at all — confirmed by
+    reading ShieldManifestManager.java's full public API: only dismissAll()
+    existed server-side, no "-N" equivalent. Added:
+      - ShieldManifestManager.dismissSome(server, playerName, count) — pops
+        up to `count` shields off the END of the player's shield list (most-
+        recently-added first), discards their entities, leaves the rest.
+        Safe to shrink mid-formation: dome/focus positions are recomputed
+        from scratch every tick from set.shields.size(), no per-shield index
+        state elsewhere depends on list length staying fixed.
+      - ContextMod.java: new GET /dismiss-shield?player=X&count=N (singular,
+        default count=1) alongside the existing /dismiss-shields (plural,
+        all).
+      - CommandPanelScreen.java SHIELDS tab: action row expanded from 3
+        buttons to 4 — "+1" / "Dome ×N" / "−N" / "Dismiss All" — using the
+        existing Batch-size stepper for N on both the add and the new
+        reduce button. Also fixes the actual "+1"/+1 complaint: the old
+        labels were "+1" and "+" + shieldBatchSize, which collide into two
+        identical "+1" buttons whenever the batch stepper sits at its
+        default value of 1 (always, until the user manually changes it) —
+        renamed to "Dome ×N" so the label is never ambiguous with "+1" at
+        any N, not just patched for N=1.
+
+[x] BUG — RED TERMINAL's "Dismiss Clone" (CLONES tab) reported "still
+    Active" after clicking, regardless of whether the server-side dismiss
+    actually worked. Root cause, confirmed by comparing endpoint response
+    shapes against the parser (not guessed): cloneFire()/shieldFire() fed
+    the ack response of the action itself (/dismiss-clone → {"ok":true} or
+    {"error":...}; /dismiss-shields → {"ok":true}) straight into
+    parseCloneState()/parseShieldState(), which expect a full /clone-state
+    or /shield-state shaped payload ("active":.../"count":...). Two distinct
+    failure shapes from the same root cause:
+      - If SolsaiClient.get() returns null (network hiccup, timeout,
+        exception — genuinely happens per this codebase's history of
+        connectivity issues), parseCloneState(null) returns immediately
+        without touching cloneActive at all — the panel is just stuck
+        showing whatever it said before. This matches the user's exact
+        report ("still says Active").
+      - If the ack DOES come back non-null, parseCloneState computes
+        `cloneActive = json.contains("\"active\":true")` against a payload
+        that never contains that substring either way — silently flips to
+        "Inactive" whether or not the dismiss actually removed anything
+        server-side. The same latent bug existed for shieldFire() against
+        /dismiss-shields and the new /dismiss-shield.
+    FIX: shieldFire()/cloneFire() now fire the action, then explicitly
+    re-query /shield-state or /clone-state and parse THAT — the displayed
+    status is always a fresh read of real server state, never inferred from
+    an action's own ack. This does not by itself prove CloneManager.dismiss()
+    successfully removes the entity server-side (untested live, no MC
+    server currently running to check against) — but it stops the panel
+    from silently lying about the outcome either way, which was the
+    directly-reported symptom.
+    NOTE: CloneManager.java already has an uncommitted (pre-existing, not
+    written this round) attempted fix for a DIFFERENT clone-dismiss bug —
+    discard() used to look the clone up via
+    PlayerManager.getPlayer(UUID)ᅠ(claimed broken because a manually-
+    connected FakePlayerEntity never lands in PlayerManager's UUID map) and
+    now uses world.getEntity(uuid) instead, routing actual removal through
+    PlayerManager.remove() when found. Whether that fix is itself correct
+    is UNVERIFIED — reading PlayerManager.onPlayerConnect()'s real source
+    (extracted from the yarn-mapped jar this session) shows it DOES insert
+    into playerMap/players before returning, which is somewhat at odds with
+    that fix's stated rationale, but the fix is harmless either way (falls
+    back to entity.discard() if not a ServerPlayerEntity) and was not
+    touched further this round. If the user still sees the clone fail to
+    dismiss after this round's UI fix (i.e. panel now correctly flips to
+    Active because the server genuinely didn't remove it), the next place
+    to look is CloneManager.dismiss()/discard() itself, live, with the
+    server up.
+
+Built both projects clean (`./gradlew compileJava` + full `build -x test`,
+no errors in either). Deployed:
+  - solsai-1.10.2.jar → /home/prizmo/mc-prominence2/data/mods/ (old backed up
+    .bak-20260823-193522 → then this round's shield-reduce/ContextMod change
+    also went into a rebuild, see below).
+  - prizmo-system-0.1.18.jar → the ATLauncher client instance mods folder
+    (/home/prizmo/.local/share/atlauncher/instances/ProminenceIIHasturianEra/
+    mods/, old backed up .bak-20260823-211819). Confirmed via md5sum the
+    previously-deployed 0.1.18 (16:54 build) predates this session's fixes —
+    i.e. whatever the user tested against when they reported the bug did NOT
+    yet have this round's changes.
+Fabric mods only load at full client relaunch (not just reconnect) — user
+needs to fully restart the MC client to pick this up. No prominence2 server
+container is running at all right now (docker ps -a shows none), so nothing
+was restarted server-side and nothing here has been live-tested yet.
+
+────────────────────────────────────────────────────────
+SESSION 23 (2026-08-23, same day, continued) — ARROW SPIN BUG FIXED (real
+root cause, verified against mapped MC source, not guessed); ARROW SPEED x15
+────────────────────────────────────────────────────────
+Solsai repo, on Apollo (Apollo now has a working JDK 21 — `javac -version`
+confirms 21.0.12.1, contradicting session 18's "Apollo has no JDK" note;
+built and compiled directly here this session, no NOX round-trip needed).
+
+[x] BUG — manifested arrows spun/flipped wildly in place while floating and
+    orbiting the player. Root cause confirmed by extracting and reading the
+    actual mapped 1.20.1 source (net.minecraft.entity.projectile.
+    PersistentProjectileEntity, from the yarn-mapped sources jar in
+    .gradle/loom-cache — not guessed): conjureOne()/tick()/shoot() in
+    ArrowManifestManager.java set the arrow's noClip state via the raw
+    `arrow.noClip = <bool>` field write, never through the real setter
+    `setNoClip(bool)`. PersistentProjectileEntity.isNoClip() reads that raw
+    field only on the server; on the CLIENT it instead reads a separate
+    synced `PROJECTILE_FLAGS` DataTracker bit that ONLY setNoClip() updates.
+    Net effect: server-side noClip was true (raw field), client-side noClip
+    was always false (flag never synced). PersistentProjectileEntity.tick()
+    branches its yaw calculation on this exact flag (`bl ? atan2(-e,-g) :
+    atan2(e,g)` — a 180°-flipped formula) — so server and client computed
+    OPPOSITE yaw signs from the same velocity every tick, and since the
+    manager forces a fresh velocity/position sync every tick (velocityDirty
+    = true, needed for the ring motion — see session 22's comment on that),
+    client and server fought over the arrow's facing every single tick.
+    That fight is what rendered as "spinning like crazy."
+    FIX: all three `arrow.noClip = ...` raw writes (spawn in conjureOne(),
+    tick()'s per-tick re-affirm, and the reset to false in shoot()) replaced
+    with `arrow.setNoClip(...)`, which updates both the raw field and the
+    synced flag — client and server now agree, no more per-tick fight.
+    Verified by reading ProjectileEntity.java + PersistentProjectileEntity.java
+    from the actual yarn-mapped sources (not assumed from memory).
+
+[x] Arrow release speed increased ×15 per user request (was 3.5 blocks/tick,
+    now 52.5). Single constant, single call site (ARROW_SPEED in
+    ArrowManifestManager.java, used only in shoot()) — covers every release
+    path (single manifest+shoot, burst+shoot) since they all funnel through
+    the same shoot(). Vanilla's hit detection here is raycast/sweep-based
+    (World.raycast + getEntityCollision between last and next tick position),
+    not a naive point check, so it should still register hits correctly at
+    this speed — untested live though.
+
+Built clean (`./gradlew build -x test`), produced solsai-1.10.2.jar. Deployed
+to /home/prizmo/mc-prominence2/data/mods/solsai-1.10.2.jar (old jar backed up
+as .bak-20260823-193522). No prominence2 container is currently running at
+all (`docker ps -a` shows none) — nothing to restart, so this carries no
+"don't restart the live server" risk; whenever the server is next started
+this build will be what loads. NOT live-tested yet (no server up to test
+against) — needs both the spin fix and the x15 speed confirmed once the
+server is up.
+
+Note: gradle.properties/build.gradle here show solsai already bumped past
+1.10.0 to 1.10.2 by uncommitted work already in the tree before this session
+touched anything (session 22's shield rewrite + others) — this session's
+changes are on top of that, still uncommitted, consistent with everything
+else in that pile.
+
+────────────────────────────────────────────────────────
+SESSION 22 (2026-08-23, same day, continued) — ARROW PICKUP BUG FIXED;
+SHIELD MANIFESTATION REWRITTEN ONTO ItemDisplayEntity; CROSS-AGENT SYNC GAP
+FOUND ON APOLLO (NOT RECONCILED — SEE BOTTOM OF THIS SECTION)
+────────────────────────────────────────────────────────
+Solsai repo only (all edits made on Apollo's checkout — Apollo has no working
+JDK, see session 18 — synced to NOX via scp for building, jar built on NOX,
+deployed to Apollo's mods folder). NOT live: server container not restarted,
+standing "ask before restart" rule still applies.
+
+[x] BUG — ArrowManifestManager's floating arrows (R key, /arrow-manifest)
+    got sucked into the player's inventory the instant they spawned. Root
+    cause, confirmed via javap disassembly of PersistentProjectileEntity
+    (1.20.1 mapped jar, not guessed): onPlayerCollision() gates tryPickup()
+    on `(inGround || isNoClip()) && shake <= 0` — vanilla treats noClip as
+    pickup-eligible the same as "landed in a block." manifest() sets
+    arrow.noClip = true to freeze the arrow midair (correct, needed for the
+    float effect), which made it instantly pickup-eligible while floating
+    right at the player's face every tick. tryPickup() itself switches on
+    the arrow's public `pickupType` field, which defaults to ALLOWED because
+    `new ArrowEntity(world, player)` chains through setOwner(player).
+    FIX: ArrowManifestManager.java — pickupType set to DISALLOWED right
+    after noClip=true in manifest(), restored to ALLOWED in shoot() right
+    before real velocity is applied (so a genuinely fired arrow can still be
+    picked up off the ground afterward, same as vanilla). No mixin needed —
+    pickupType is a public field.
+    Built clean on NOX, deployed to Apollo's mods folder
+    (solsai-1.10.0.jar, old jar backed up as .bak-20260823-145759).
+    NOT live-tested — needs the container restarted.
+
+[~] Shield manifestation rewritten: ArmorStandEntity+offhand-item →
+    DisplayEntity.ItemDisplayEntity. User's ask: shields should look like
+    actual shields (not a mob hijacked into holding one) and should carry
+    real enchantments. Structural rewrite, not a patch:
+      - Two new invoker mixins (solsai/mixin/DisplayEntityInvoker.java,
+        ItemDisplayEntityInvoker.java, registered in solsai.mixins.json's
+        "server" list) expose DisplayEntity's private setTransformation/
+        setBillboardMode and ItemDisplayEntity's package-private
+        setItemStack — vanilla only ever sets these from NBT/summon
+        commands, no public API exists. Same @Accessor-mixin pattern this
+        repo already uses (KeyBindingAccessor, MobEntityAccessor).
+        Deliberately did NOT expose setTransformationMode/
+        getTransformationMode — in 1.20.1 that method's signature uses the
+        CLIENT-ONLY net.minecraft.client.render.model.json.
+        ModelTransformationMode type (fixed in 1.20.2+ by Mojang's own
+        ItemDisplayContext rework); touching it risked a dedicated-server
+        classload problem. Not needed anyway — we don't use it.
+      - consumeShieldFromInventory() now returns the actual removed
+        ItemStack (real NBT/enchants/glint) instead of discarding it for a
+        bare durability int. spawnShieldsAuto/spawnShields/splitSummon all
+        thread the real stack through to the display entity — an enchanted
+        shield now actually displays enchanted. Split mode copies the one
+        physical shield's stack cosmetically onto all N displays (only one
+        item is consumed either way, matches old behavior).
+      - No hitbox at all (DisplayEntity isn't a LivingEntity) — structurally
+        rules out session 21's eating-while-surrounded bug rather than
+        patching it with setMarker(true).
+      - faceOutward() rewritten: display-entity visuals ignore
+        Entity.setYaw()/setBodyYaw()/setHeadYaw() entirely — rotation is
+        driven by an AffineTransformation. New version builds a rotation
+        quaternion (JOML Quaternionf.rotationTo) mapping a
+        SHIELD_MODEL_FRONT constant onto the outward direction, scaled by
+        new SHIELD_SCALE=1.6f. Dome/focus/stacked positioning math itself
+        (Fibonacci sphere, positionDistributed grid) is untouched.
+      - Side effect, not a bug: shields can no longer be depleted by melee.
+        The old "Step 2a health tracking" pool-drain-on-damage code in
+        tick() only worked because ArmorStandEntity was a LivingEntity;
+        it's still in the file (instanceof LivingEntity check just never
+        matches now) but is dead code for shields going forward. Projectile
+        blocking (the primary mechanic) is unaffected.
+    Builds clean on NOX. Deployed to Apollo's mods folder in the same jar
+    as the arrow fix above. TWO THINGS UNVERIFIED, NEED LIVE TEST:
+      - SHIELD_MODEL_FRONT is a guess (assumed shield model faces south/+Z
+        under FIXED billboard mode) — if shields render sideways/backwards
+        in-game, it's a one-constant fix (ShieldManifestManager.java, near
+        the other tuning constants).
+      - @Invoker mixin targets are only fully verified when Mixin actually
+        transforms the class at game load, not at compile time — a clean
+        Gradle build doesn't 100% prove invokeSetTransformation/
+        invokeSetBillboardMode/invokeSetItemStack resolve correctly at
+        runtime.
+    NOT live-tested — needs the container restarted, then "summon shield" /
+    "manifest dome" tried in-game.
+
+[ ] CROSS-AGENT SYNC GAP — found while syncing this session's own changes to
+    NOX for building, NOT caused by or fixed by this session:
+      - solsai: Apollo's checkout has CloneManager.java (21-line diff,
+        mtime 14:48 today) and gradle.properties changes that NOX's
+        checkout does not have. Neither is related to arrows/shields.
+      - prizmo-system: Apollo's checkout has CommandPanelScreen.java
+        changes (mtime 14:39 today, 9 insertions/3 deletions) NOT on NOX,
+        plus a brand-new untracked file
+        src/main/java/com/prizmo/hudlink/screen/ShieldWheelScreen.java
+        that doesn't exist on NOX's checkout AT ALL — mtime 15:20:03 today,
+        i.e. it appeared literally during this session, strongly suggesting
+        another agent was working on Apollo concurrently and never synced
+        to NOX (same class of gap session 18's "NOX/Apollo divergence"
+        reconciliation fixed once already — it has drifted again since).
+    Not reconciled this session — out of scope for what was asked, and
+    ShieldWheelScreen.java's purpose/completeness is unknown without
+    reading it first. Flagging so the next agent (or the one that wrote it)
+    doesn't lose it to an overwrite next time NOX/Apollo get synced.
+
+────────────────────────────────────────────────────────
+SESSION 21 (2026-08-23, same day, continued) — SHIELD MANIFESTATION LIVE-
+TESTED FOR THE FIRST TIME; 3 REAL BUGS FOUND, NONE FIXED YET
+────────────────────────────────────────────────────────
+User live-tested shield manifestation in-game (first time ever — see session
+19's "LIVE STATE" note, prominence2 container was actually up). Investigated
+by reading solsai/ShieldManifestManager.java + prizmo-system/HudLinkClient.java
+against the user's report. Nothing in this section is fixed yet, all still
+[ ].
+
+[ ] BUG — surrounded by shields, could not eat, starved. Root cause: the
+    ArmorStandEntity created in spawnShieldsAuto()/spawnShields()
+    (ShieldManifestManager.java ~314, ~352) is never marked
+    stand.setMarker(true) (confirmed via grep — no setMarker/setInvulnerable/
+    setInvisible anywhere in the file). A stock armor stand has a full hitbox
+    and vanilla always resolves right-click as entity-interact before
+    use-held-item. Shields orbit at ORBIT_RADIUS=2.5 blocks (line 79), inside
+    vanilla's ~3-block entity interact reach, so with several shields up your
+    crosshair keeps landing on a stand and eating never fires.
+    FIX (not applied): stand.setMarker(true) at creation — marker stands have
+    no hitbox and vanilla's own ArmorStandEntity.interact() bails out
+    immediately for isMarker(), so right-click passes through to eat/use.
+    Positioning is unaffected (setNoGravity(true) + manual position each
+    tick already, no physics/collision dependency).
+
+[ ] BUG — could not dismiss shields. shieldDismissKey ships UNBOUND by
+    default (HudLinkClient.java, part of session 20's "8 variants default to
+    UNBOUND deliberately" change, shipped as prizmo-system v0.1.15) — this is
+    working as designed, not a code bug, but there's no in-game hint that
+    key.hudlink.shield.dismiss needs to be manually assigned in Options >
+    Controls before dismiss does anything. User needs to bind it there.
+    Flagged as a UX gap, not scheduled as code work unless asked.
+
+[ ] BUG — shield spread/focus never actually follows player look direction.
+    HudLinkClient.java: both focusDistributedKey (F) and focusStackedKey
+    hardcode "&track=true" in their fireGet() calls. track=true makes
+    ShieldManifestManager.tick() run findNearestHostile() every tick and aim
+    focusDir at whatever living entity is nearest (within
+    FOCUS_TRACK_RADIUS=24 blocks) — completely ignoring player look, which is
+    only used as a fallback when nothing is nearby at all. The track=false
+    path (capture player yaw/pitch once via getRotationVector-equivalent
+    math in focus(), ShieldManifestManager.java ~411-424 — verified correct)
+    is fully implemented server-side but UNREACHABLE — no keybinding in
+    HudLinkClient.java ever sends track=false.
+    FIX (not applied): add a new KeyBinding category (e.g.
+    key.hudlink.focus.look, unbound by default per session 20's convention)
+    that fires "&mode=distributed&track=false". Needs a lang entry too (see
+    session 20's "4 of 7 keys had no lang entry" bug — don't repeat it).
+
+[ ] FINDING (not a bug, capability gap) — projectile blocking is proximity-
+    only, not directional. ShieldManifestManager.tick()'s projectile step
+    (~604-628) discards any ProjectileEntity inside PROJ_RADIUS=1.6 of a
+    shield's CURRENT position — no proj.getVelocity() check, no dot product
+    against direction-to-player, no prediction. Consequences: (1) discards
+    the player's own outgoing arrows if their flight path passes near a
+    shield shortly after firing — no shooter/owner exemption exists; (2)
+    discards unrelated projectiles (other players' shots, thrown potions/
+    ender pearls/snowballs) that just happen to pass nearby; (3) dome mode
+    (shields spread over a full sphere) has real gaps between shields' 1.6-
+    radius catch spheres — only focus/distributed mode's tighter spacing
+    (FOCUS_SPACING=0.80 rad ≈ 2.0 blocks between shields vs. 3.2-block catch
+    diameter) actually overlaps enough to behave like a wall.
+    Not scheduled — would need velocity-direction filtering added if the
+    user wants real "incoming toward me" detection instead of pure
+    proximity.
+
+[ ] Not a bug, just underwhelming: single-shield summon (plain "G") orbits
+    very slowly — the ROT_SPEED=0.010 rad/tick comment claiming "~10.5s/rev"
+    is stale/wrong, actual period at 20 tps is ~31s/rev. With only 1 shield
+    up, that reads as "just floating near me" rather than a deliberate
+    formation over a short test window. Multiple shields (manifest-dome) or
+    focus mode should look much more obviously formed. Cosmetic "not armed"
+    look (no raised-shield blocking pose) is expected — armor stands can't
+    play block animations, this was never part of the design, the actual
+    block/deflect effect is invisible math.
+
+────────────────────────────────────────────────────────
+SESSION 20 (2026-08-23, same day as session 19, continued) — EQUIP/STAY/EXPLORE
+BUG FIXES; PRIZMO-SYSTEM KEYBIND REBIND + NEW STATUS/CHAT SCREEN; VERSION-STRING
+BUILD FIX IN BOTH MODS
+────────────────────────────────────────────────────────
+Everything below is uncommitted in all three repos (nilo, prizmo-system, solsai).
+Nothing here has been live-tested yet — see the "LIVE STATE" note at the end,
+which also flags that the currently-RUNNING server is on an older solsai jar
+than what's on disk.
+
+[x] "!equip leather_helmet" did nothing but echo to chat — root cause: only
+    "#" was a recognized in-game command prefix, so "!" fell through to the
+    Letta conversational path (which has no "equip" action tag, so it just
+    talked instead of acting). Three fixes, nilo repo:
+      - nilo.js: "!" now canonicalized to "#" at the top of the chat handler
+        (aliases the whole prefix system, not just equip).
+      - items.js: getEquipDestination() now also recognizes the
+        "..._armor_head/_chest/_legs/_feet" naming convention used by several
+        mods on this pack (archers, death_knights, indrev, paladins, rogues —
+        78 items total) — previously fell through to 'hand' for all of them.
+      - commands/inventory.js: equip confirmations/failures now go via
+        "/msg PrizmoElectric ..." (new tellMaster() helper) instead of public
+        chat — requested explicitly ("make it discrete"). Side effect: also
+        won't mirror into Discord (discord-bridge.js already skips anything
+        starting with "/").
+    NOT live-tested — needs "/msg" confirmed actually working on this modpack
+    (no permission/command-blocking mod found in the mods folder, so it
+    should, but never fired live).
+
+[x] "stay" didn't actually hold position — sets behaviorMode to 'idle', which
+    is exactly the state monitor.js's autonomous exploration waits for
+    (8-16s cooldown, then wanders off looking for containers). Fixed:
+    commands/navigation.js's IS_STAY handler now also sets
+    state.exploringEnabled = false, same pattern IS_COME already used.
+    Contributing factor to "he wanders off and dies to mobs": once away from
+    base alone, nilo.js's reactive entityHurt retaliation (idle/follow/wander/
+    defensive modes) fires a bare equip+attack with none of full combat
+    mode's safety logic (no retreat-at-low-HP, no kiting) — NOT changed this
+    session, flagged for later if wandering-fix isn't enough on its own.
+
+[x] "stop exploring" also didn't work, separately from the above — IS_STAY's
+    own `/\bstop\b/` regex matched "stop exploring" and intercepted it BEFORE
+    the dedicated IS_STOP_EXPLORE check (which sat later in the same
+    function). Moved IS_STOP_EXPLORE up before IS_STAY, matching the existing
+    "must be checked before IS_STAY" pattern already used for
+    IS_STOP_FISH/IS_STOP_TUNNEL. IS_STOP_EXPLORE was effectively dead code
+    before this for any phrase containing "stop".
+
+[x] prizmo-system keybinds made properly rebindable (user request: "should
+    have rebindable keys like other mods, it's probably hardcoded"). Was
+    mostly already using Fabric's KeyBindingHelper (so technically already
+    rebindable) but had 2 real bugs plus a scope gap:
+      - 4 of 7 keys had no lang entry (showed as raw "key.hudlink.shield" etc.
+        in Controls menu) — added all missing en_us.json entries.
+      - KeyboardMixin hardcoded literal GLFW_KEY_C to suppress the vanilla
+        Alt-menu when the toggle key is held — broke if you rebound Toggle
+        Vision off C. Fixed via new KeyBindingAccessor (@Accessor on
+        KeyBinding's private boundKey field) so it reads whatever's actually
+        bound, live.
+      - User opted for full scope: the old Shift/Ctrl/Alt-modifier sub-action
+        pattern (e.g. Shift+G = dismiss shields) is gone. All 15 actions
+        (7 primaries + 8 former modifier-variants: shield dismiss/dome/split,
+        focus unfocus/stacked, clone dismiss, arrow shoot/dismiss) are now
+        independent KeyBindings. Primaries keep their old default keys
+        (C/V/H/G/F/Z/R); the 8 variants default to UNBOUND (GLFW_KEY_UNKNOWN)
+        deliberately — didn't want to guess free keys on a 400+ mod pack.
+        User needs to assign these themselves in Options > Controls if they
+        want the old modifier-combo behavior back on a real key.
+    Shipped as prizmo-system v0.1.15.
+
+[x] New status + private chat screen — user wanted shift+right-click to show
+    "a different screen" with status/mode/action + a private chat box, but it
+    was just showing inventory both ways. Two things going on:
+      1. Real confusion, not a bug: user has swapped Ctrl/Shift (Shift =
+         sprint for them) — InteractionMixin already correctly used
+         player.isSneaking() (bind-aware), so shift+right-click was never
+         going to trigger the sneak branch for them; sneaking is on Ctrl now.
+      2. Real gap: BotInteractScreen.java existed in the codebase — literally
+         described as "a focused chat window for the specific bot" — but was
+         completely unwired; InteractionMixin only ever referenced
+         BotInventoryScreen and BotSneakScreen.
+    Resolution: new gesture is Alt+right-click (checked via raw physical key,
+    not a logical/remappable game state, specifically so it can't collide
+    with however Sneak/Sprint end up bound). Right-click=inventory and
+    sneak+right-click=possession (BotSneakScreen) are unchanged.
+    Rebuilt BotInteractScreen.java into the real status+chat screen:
+      - Status bar: health/food/mode/action, same BotApiState source
+        BotSneakScreen already used, now with a real "action" field (see
+        below) that didn't exist before.
+      - Chat log: new BotChatLog.java (per-bot ring buffer, 40 lines),
+        populated by a new ClientReceiveMessageEvents.GAME listener in
+        HudLinkClient that parses incoming "<Sender> whispers to you: <msg>"
+        text and files it under the sender if the sender is a known bot.
+      - Input box sends via "/msg <bot> <text>" — never public chat.
+    New "action" field (didn't exist before — only behaviorMode did):
+      - combat.js: combatTick now sets state.combatTarget to the mob it's
+        currently engaging (mobDisplayName() helper, same modded-registry
+        fallback isHostileMob() already used), null when not fighting.
+      - api.js: deriveCurrentAction(bot) — cheap one-liner, NOT a full task
+        model: checks isMining/isFarming/isLooting/combatTarget/tunneling/
+        follow/wander/pathfinder-has-goal, else "Idle". pushModeToSolsai()
+        signature extended with an action param, sent to Solsai's /bot-mode
+        as &action=... alongside &mode=...
+      - Solsai ContextMod.java: /bot-mode now stores action in a new
+        botActions map (parallel to the existing botModes map);
+        buildBotState() (backing /bot-state) now returns "action" in the
+        JSON too.
+      - BotTracker.java / SolsaiClient.java: BotApiState gained an `action`
+        field, parsed from /bot-state's new JSON key.
+    nilo.js gained a bot.on('whisper', ...) handler (MASTER-only, no "#"
+    needed — same "deliberate channel, not casual chat" reasoning as the CLI
+    terminal): tries handleNaturalCommand first, falls back to Letta with
+    bot.whisper() as the reply channel (letta.js's chatLong() got an optional
+    sendFn param for this). NOTE: command confirmations triggered this way
+    still reply via each command's own public bot.chat() — only the Letta
+    conversational fallback is actually private. Rethreading every command
+    handler's reply channel was out of scope this round.
+    Shipped as prizmo-system v0.1.16.
+
+[x] Found + fixed the same bug in both mods' build.gradle: neither had a
+    processResources { expand ... } block, so fabric.mod.json's "${version}"
+    placeholder was NEVER substituted — every jar either mod has ever shipped
+    (0.1.0-0.1.14, and solsai 1.10.0 before today) actually reported its
+    version as the literal string "${version}", not a real number. Fixed in
+    both build.gradle files. First jars with a correct version field:
+    prizmo-system 0.1.15+, solsai's latest rebuild today (still labeled
+    1.10.0 — did not bump solsai's version number, wasn't asked to).
+
+[ ] LIVE STATE AS OF THIS WRITING (check before assuming anything below is
+    actually running):
+      - prominence2 docker container IS up (started ~10:15, healthy) — user
+        must have started it. /home/prizmo/mc-prominence2/data/mods/
+        solsai-1.10.0.jar on disk is the 11:10 build (action-tracking +
+        version fix), but the RUNNING container started at 10:15, i.e.
+        BEFORE that jar was written — so the live server is actually running
+        an OLDER solsai build (the ~10:11 one, shield-fix only, no
+        action-tracking). It needs an actual restart to pick up the current
+        jar. Standing rule still applies: do NOT restart the live server
+        without asking first.
+      - nilo.service (systemd --user) is NOT running — stopped at 09:14,
+        over 2 hours before this note. Nilo is not currently connected to
+        the (now-up) server at all. Whether that was intentional or the
+        service just needs restarting hasn't been confirmed with the user
+        yet.
+      - prizmo-system-0.1.16.jar is deployed to the ATLauncher instance
+        mods folder, but Fabric mods only load at client launch — needs the
+        actual Minecraft client fully restarted (not just reconnect) to pick
+        it up, same as the server.
+
+────────────────────────────────────────────────────────
+SESSION 19 (2026-08-23) — RECOVERED FROM A DEAD SESSION; SOLSAI CLIENT-KICK BUG FIXED
+────────────────────────────────────────────────────────
+The session that did the work below (nilo.js/clones.js/cockpit.html edits, the
+firewall debugging) hit an unrecoverable Claude Code bug: a malformed internal
+advisor-tool response left every subsequent turn throwing
+`API Error: 400 ... unexpected tool_use_id ... advisor_tool_result` — including
+a /doctor attempt. Not a code bug, just lost the session; this session picked
+up from the leftover working-tree changes and git history to reconstruct
+what had actually happened.
+
+[x] Unrecorded nilo.js-repo changes from the dead session — none of this had
+    a checklist entry despite being fully written (syntax-checked clean,
+    reads as complete, just never logged or committed):
+      - nilo.js/clones.js: skin path switched to FabricTailor's "upload"
+        variant (/data/Skins/Nilo_mk1.png) — SkinsRestorer's URL-based skin
+        route hands the URL to MineSkin.org, which refuses to fetch any
+        private/LAN address, so no local static-file-server URL could ever
+        have worked once FabricTailor was reinstalled 2026-08-23.
+      - nilo.js: NOX's Apollo-failover watchdog was checking Letta's port
+        (8283) instead of Nilo's own CLI port (4000) — Letta runs as an
+        always-on service independent of nilo.service, so the watchdog was
+        yielding/exiting every 5 minutes regardless of whether Apollo's Nilo
+        was actually up. Fixed to check port 4000.
+      - nilo.js: local CLI WebSocket now answers #help without a live bot
+        connection, and falls back to Letta for any unmatched message
+        (previously just silently did nothing — looked like "Letta not
+        working" when it was just an unhandled command).
+      - commands/misc.js: "help"/#help reclaimed from navigation.js's
+        combat-assist IS_HELP regex (which used to fire on bare "help") —
+        assist still works via "assist"/"guard me"/etc.
+      - discord-bridge.js: bot.chat wrapper rewritten so Discord/in-game/CLI
+        replies never cross-post into each other; Letta context now uses the
+        actual Discord speaker's username instead of hardcoding MASTER;
+        redundant "NILO joined Minecraft" suppressed for 5 min after "NILO is
+        awake" on a normal startup.
+      - scripts/nilo-chat.js: parses the WebSocket payload type (status/error)
+        for color, rate-limits the "[disconnected]" notice (max 1/min, 6/hr)
+        so a flapping connection doesn't spam the terminal.
+      - public/cockpit.html: host-status line pings NOX (192.168.1.100) and
+        Apollo (192.168.1.101) directly on port 3008 (api.js's /api/state),
+        independent of which host served the page — this was mid-debug when
+        the session died (NOX's ufw was blocking 3008/4000; user said "they
+        are open now" right before the crash, never confirmed working).
+      - servers.json: prominence2 host changed localhost -> 192.168.1.101
+        (MC now runs in Docker on Apollo, not bound to plain localhost the
+        way this repo's process expects).
+      - package.json + patches/: added patch-package postinstall +
+        mineflayer-spectator+0.0.5.patch (null-guards entityData lookup for
+        modded/unregistered entity types, was throwing on this server).
+      - MANUAL.txt: "!" -> "#" Discord command doc catch-up, help/assist split.
+    STILL UNCOMMITTED as of this writing — `git status` in nilo-project/nilo
+    shows all of this modified but not staged. Commit when confirmed working.
+
+[x] Solsai client-kick bug — FOUND AND FIXED. The screenshot the dead session
+    never got to ("Connection Lost — Received a registry entry that is
+    unknown to this client... solsai") was real: ContextMod.java registered
+    `solsai:shield_block` as a genuine Fabric Block (Registries.BLOCK) to
+    intercept the Iron Gauntlet's laser raycast (see prizmo-system/
+    mod-research/bosses-of-mass-destruction/IRON_GAUNTLET_ARCHITECTURE.md for
+    the full mechanism). Fabric's registry-sync check kicks ANY connecting
+    client that doesn't have the entry — every client, not just ones near the
+    block — which directly contradicts "Solsai should be purely server-sided"
+    (Solsai has no client-side jar). Also resolved a stale checklist line:
+    Solsai actually WAS deployed to /home/prizmo/mc-prominence2/data/mods/
+    this morning (09:24, by the dead session) — the previous "[ ] still not
+    deployed" below is stale, kept for history but superseded.
+    FIX APPLIED (minimal, laser-wall behavior traded off for now): commented
+    out the Registry.register call in ContextMod.java and turned
+    ShieldManifestManager's updateShieldBlock/removeShieldBlock into no-ops.
+    Shields still mob-push and block projectiles (keyed off the ArmorStand's
+    entity position, unaffected); they no longer stop the Gauntlet laser.
+    Built clean on NOX (JDK 21, gradle build succeeded), verified the string
+    "shield_block" no longer appears in the compiled ContextMod.class.
+    Deployed to Apollo's mods folder (old jar kept as
+    solsai-1.10.0.jar.bak-20260823). Source changes NOT committed yet (both
+    NOX and Apollo solsai checkouts now have this as uncommitted working-tree
+    state, in sync with each other — same commit 3e3704a, same diff).
+    NOT yet live-tested — no MC server container is currently running on
+    Apollo (`docker ps -a` shows no prominence2 container at all; user chose
+    to deploy the jar but leave the server down for now).
+    [ ] Proper fix, deferred by user ("essential comes first"): redesign the
+        laser-wall so it never registers a real block at all — e.g. mixin
+        AbstractBlockState's collision-shape query (used by World.raycast's
+        ShapeType.COLLIDER step) to fake a solid hit at active shield
+        positions without ever calling world.setBlockState. Positions stay
+        real AIR (known to every vanilla client), so nothing needs syncing.
+        Needs a Mixin into a stable vanilla method — same pattern as the
+        existing MobEntityAccessor/GoalSelectorAccessor mixins, just a new
+        target. Not started.
+
+[ ] Also found, unrelated, still uncommitted in solsai: LivingEntityEnchantMixin.java
+    has getArmorItems/getHandItems injects marked `require = 0` (non-fatal) —
+    another mod's LivingEntity mixin runs first on this modpack and the
+    target fails to resolve; was previously crash-on-load, now just skips the
+    phantom-armor/hand cosmetic silently. Present identically on both NOX and
+    Apollo (in sync), predates this session, never logged before.
+
+────────────────────────────────────────────────────────
+SESSION 18 (2026-08-22/23) — SOLSAI + PRIZMO-SYSTEM RECONCILED; INVENTORY CONTROL WRITTEN, NOT YET LIVE-TESTED
+────────────────────────────────────────────────────────
+Started as "full inventory control during possession" scoping. Found both
+solsai and prizmo-system had diverged between NOX and Apollo — reconciled
+both (see below), then wrote the actual feature on top. Nothing in this
+section has been tested in-game yet.
+
+[x] Solsai NOX/Apollo divergence — RECONCILED. Both machines backed up first
+    (~/solsai-reconcile-backup/), each side's uncommitted work committed
+    separately, merged via a new `nox` peer git remote on Apollo (mirroring
+    nilo's own nox/apollo SSH remote setup — see feedback memory "Git sync,
+    not GitHub"). ContextMod.java auto-merged cleanly (both sides' additions
+    were non-overlapping); CloneManager.java, MobEntityAccessor.java, and
+    solsai.mixins.json needed manual resolution (both sides had written a
+    *different* feature under the CloneManager name — combined rather than
+    picked one, since the merged ContextMod.java calls methods from both).
+    Also fixed: gradle.properties pinned org.gradle.java.home to a JDK 26
+    install Gradle 8.6/Loom can't run on — removed the pin, use JAVA_HOME
+    instead. Both machines now on commit 76a8f9d, clean, verified building
+    (JDK 21 required — NOX has one, Apollo currently only has a JRE, see
+    below). 4 commits ahead of GitHub origin/main, not pushed there.
+
+[x] prizmo-system NOX/Apollo divergence — RECONCILED, same process. NOX was
+    missing Apollo's whole "v0.1.14: HUD checkpoint/ghost tracking, skill
+    wheel and terminal screen" commit, plus had its own separate uncommitted
+    work (CommandPanelScreen.java, BotTracker/HudLinkClient changes, shield
+    block client assets, mod-research/ reference material for the Freyr Sword
+    and Gauntlet features). HudLinkClient.java had a real conflict: both sides
+    bound a different feature to the G key. Kept NOX's shield-manifestation
+    binding on G; moved Apollo's ghost-clone recall to H (Husk-based clones).
+    Excluded a stray decompiled-third-party-mod extraction (loose net/ and
+    META-INF/ dirs at the repo root, not real source) — added to .gitignore
+    instead of committing binaries/bytecode. Same gradle.properties java.home
+    fix applied here too. Both machines now on commit 0b84de6, clean, verified
+    building on NOX (JDK 21). Also 4 commits ahead of origin/main.
+    NOTE: agent/CHANGELOG.txt's merge is a mechanical concat of both sides'
+    session docs, not carefully re-sequenced — content is all there but the
+    file's "newest first" convention is slightly out of order at the merge
+    seam (session 20 then 21, correct order there, but check before trusting
+    strict chronology elsewhere in the file).
+
+[x] Inventory-control-during-possession — CODE WRITTEN, builds clean on both
+    solsai and prizmo-system, NOT yet live-tested (needs Solsai deployed —
+    see below — plus an actual in-game possession session):
+      - BotSneakScreen.java: press E opens BotInventoryScreen without
+        releasing possession control (existing removed()-cleanup handles the
+        swap). Number keys 1-9 set a one-shot heldSlot, sent via /bot-control.
+      - BotInventoryScreen.java: new fromPossession constructor flag; E swaps
+        back to BotSneakScreen when set (existing right-click entry point
+        unchanged, fromPossession=false there).
+      - ContextMod.java: ControlState gained a heldSlot field (-1 sentinel =
+        no change this tick, since 0 is a valid slot), threaded through
+        /bot-control's query params and /bot-control-state's JSON response.
+      - remote-control.js: reads cs.heldSlot, calls bot.setQuickBarSlot() when
+        0-8 (mineflayer API confirmed present — node_modules/mineflayer/lib/
+        plugins/simple_inventory.js).
+      - No "drop item to world" endpoint exists in Solsai; out of scope unless
+        asked for specifically — BotInventoryScreen doesn't support it either
+        (dragging out just cancels/restores, doesn't throw the item).
 
 ────────────────────────────────────────────────────────
 SESSION 17 (2026-08-05) — NEW THIS SESSION, NEEDS LIVE TEST

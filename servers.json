@@ -1,7 +1,7 @@
 {
   "prominence2": {
-    "description": "Local Prominence II modpack (Fabric 1.20.1)",
-    "host": "localhost",
+    "description": "Prominence II modpack (Fabric 1.20.1) — docker on Apollo",
+    "host": "192.168.1.101",
     "port": 25565,
     "version": "1.20.1",
     "auth": "offline",

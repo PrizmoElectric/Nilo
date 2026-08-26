@@ -22,6 +22,19 @@ function resolveItemName(item) {
 
 function getEquipDestination(item) {
   const n = resolveItemName(item);
+  // Some mods (archers, death_knights, indrev, paladins, rogues, ...) name armor
+  // pieces "<set>_armor_head/chest/legs/feet" instead of using a material word
+  // like "helmet" — none of the keyword lists below catch that. Check this exact
+  // suffix pattern first since it's unambiguous (requires the literal "armor_"
+  // segment, so it can't misfire on e.g. "iron_chest" storage-block items).
+  const slotSuffix = n.match(/armor_(head|chest|body|torso|legs|feet)$/);
+  if (slotSuffix) {
+    const slot = slotSuffix[1];
+    if (slot === 'head') return 'head';
+    if (slot === 'chest' || slot === 'body' || slot === 'torso') return 'torso';
+    if (slot === 'legs') return 'legs';
+    if (slot === 'feet') return 'feet';
+  }
   // Head — vanilla + common modded keywords
   if (['helmet','cap','skull','hat','hood','mask','helm','crown','circlet',
        'coif','casque','bascinet','barbute','morion','headband','headgear',

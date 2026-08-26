@@ -30,8 +30,9 @@ const IS_FOLLOW = cmd([
   /\bfollow\b/,
   /\bme segue\b/, /\bvem comigo\b/, /\bme acompanha\b/, /\bfica comigo\b/,
 ]);
+// Note: bare "help" is NOT here — #help is reserved for the command list (misc.js).
 const IS_HELP = cmd([
-  /\bhelp\b/, /\bassist\b/, /\bprotect me\b/, /\bwatch my back\b/, /\bi need help\b/,
+  /\bassist\b/, /\bprotect me\b/, /\bwatch my back\b/, /\bi need help\b/,
   /\bdefend me\b/, /\bguard me\b/, /\bcover me\b/, /\bfight with me\b/, /\bfight for me\b/,
   /\bme ajuda\b/, /\bme ajude\b/, /\bme protege\b/, /\bpreciso de ajuda\b/, /\bme cobre\b/,
   /\bme defende\b/, /\bme escolta\b/,
@@ -79,6 +80,10 @@ const IS_STOP_EXPLORE = cmd([
   /\bstop exploring\b/, /\bdon'?t explore\b/, /\bstop wandering\b/, /\bdon'?t wander\b/,
   /\bpara de explorar\b/, /\bn[aã]o explora\b/, /\bfica parado\b/,
 ]);
+const IS_GO_THERE = cmd([
+  /\bgo there\b/, /\bwalk there\b/, /\bhead there\b/, /\bgo where i('?m| am) looking\b/,
+  /\bvai (para )?(ali|l[aá])\b/, /\bvai onde estou olhando\b/,
+]);
 const IS_EXPLORE = cmd([
   /\bgo explore\b/, /\bstart exploring\b/, /\bgo wander\b/, /\bexplore\b/,
   /\bvai explorar\b/, /\bcome[cç]a a explorar\b/, /\bexplora\b/,
@@ -108,6 +113,18 @@ async function handle(bot, lower, raw, username) {
       bot.pathfinder.setGoal(new GoalNear(pos.x, pos.y, pos.z, 2));
     }
     bot.chat('Coming.');
+    return true;
+  }
+
+  if (IS_GO_THERE(lower)) {
+    const { position } = getPlayerGazeTarget(bot);
+    if (!position) { bot.chat("I don't see anywhere to go there."); return true; }
+    setBehavior(bot, 'idle', MASTER);
+    state.exploringEnabled = false; // hold once arrived, same as IS_COME
+    const movements = createMovements(bot);
+    bot.pathfinder.setMovements(movements);
+    bot.pathfinder.setGoal(new GoalNear(position.x, position.y, position.z, 1));
+    bot.chat('On my way there.');
     return true;
   }
 
@@ -149,6 +166,17 @@ async function handle(bot, lower, raw, username) {
     return true;
   }
 
+  // Also must be checked before IS_STAY — "stop exploring"/"stop wandering" both
+  // contain the bare word "stop", which IS_STAY itself matches. Without this
+  // ahead of it, IS_STAY intercepted the phrase first and never actually
+  // touched exploringEnabled, so "stop exploring" silently did nothing.
+  if (IS_STOP_EXPLORE(lower)) {
+    state.exploringEnabled = false;
+    setBehavior(bot, 'idle', MASTER);
+    bot.chat('Stopping exploration.');
+    return true;
+  }
+
   if (IS_SIT(lower)) {
     setBehavior(bot, 'sit', MASTER);
     bot.setControlState('sneak', true);
@@ -158,6 +186,11 @@ async function handle(bot, lower, raw, username) {
 
   if (IS_STAY(lower)) {
     setBehavior(bot, 'idle', MASTER);
+    // Without this, autonomous exploration (monitor.js) kicks in after an
+    // 8-16s idle cooldown — behaviorMode 'idle' is exactly what it waits for
+    // — and Nilo wanders off looking for containers, same as IS_COME already
+    // guards against. "stay" needs to mean stay, not "idle for a while".
+    state.exploringEnabled = false;
     bot.chat('Staying here.');
     return true;
   }
@@ -218,13 +251,6 @@ async function handle(bot, lower, raw, username) {
       }
       // not a checkpoint — fall through to Letta
     }
-  }
-
-  if (IS_STOP_EXPLORE(lower)) {
-    state.exploringEnabled = false;
-    setBehavior(bot, 'idle', MASTER);
-    bot.chat('Stopping exploration.');
-    return true;
   }
 
   if (IS_EXPLORE(lower)) {
