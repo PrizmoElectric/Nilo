@@ -14,3 +14,6 @@ venv-aider/
 # Decompiled third-party mod research debris (not project source)
 /net/
 /META-INF/
+
+# Generated cache, exceeds GitHub's 100MB file size limit
+/nilo-assets/prominence-blockstates.json
